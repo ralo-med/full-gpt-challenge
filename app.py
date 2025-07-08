@@ -134,17 +134,16 @@ else:
         del os.environ["OPENAI_API_KEY"]
     
     # 간단한 웰컴 메시지 표시
-    st.title("🔥 DocumentGPT")
+    st.title("DocumentGPT")
     
     st.markdown(
         """
-        Welcome! 🔥
+        Welcome!
                 
         Use this chatbot to ask questions to an AI about your files!
-        
-        **Please enter your OpenAI API key in the sidebar to get started!**
         """
     )
+    st.error("❌ OpenAI API 키를 입력해주세요!")
     
     st.stop()
 
