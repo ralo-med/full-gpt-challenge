@@ -46,18 +46,22 @@ class ChatCallbackHandler(BaseCallbackHandler):
         except Exception:
             pass
 
-# 개발 모드 확인 (환경변수에 OPENAI_API_KEY가 있는지 확인)
-is_dev_mode = os.getenv("OPENAI_API_KEY") is not None
+# 실제 개발 환경인지 확인 (환경변수에 DEV_MODE가 설정되어 있는지 확인)
+is_actual_dev_mode = os.getenv("DEV_MODE", "false") == "true"
 
 # 사이드바에서 모델과 API 키 설정
 with st.sidebar:
     st.write("설정")
     
-    # 개발 모드일 때는 환경변수 사용, 배포 모드일 때는 입력받기
-    if is_dev_mode:
-        st.success("환경변수 API 키 사용중")
+    # 실제 개발 모드일 때만 환경변수 사용
+    if is_actual_dev_mode:
+        st.success("개발 모드: 환경변수 API 키 사용중")
         api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            st.error("❌ 개발 모드에서 OPENAI_API_KEY 환경변수가 설정되지 않았습니다!")
+            st.stop()
     else:
+        # 배포 모드: 사용자 입력 받기
         st.info("API 키를 입력해주세요")
         api_key = st.text_input(
             "OpenAI API Key",
@@ -116,7 +120,8 @@ with st.sidebar:
 
 # API 키가 설정되었는지 확인
 if api_key:
-    if not is_dev_mode:
+    # 개발 모드일 때만 환경변수에 설정, 배포 모드에서는 직접 사용
+    if is_actual_dev_mode:
         os.environ["OPENAI_API_KEY"] = api_key
     llm = ChatOpenAI(
         model=model_name, 
@@ -125,7 +130,23 @@ if api_key:
         callbacks=[ChatCallbackHandler()]
     )
 else:
-    st.error("❌ OpenAI API 키를 입력해주세요!")
+    # API 키가 비어있으면 환경변수에서 삭제
+    if "OPENAI_API_KEY" in os.environ:
+        del os.environ["OPENAI_API_KEY"]
+    
+    # 간단한 웰컴 메시지 표시
+    st.title("🔥 DocumentGPT")
+    
+    st.markdown(
+        """
+        Welcome! 🔥
+                
+        Use this chatbot to ask questions to an AI about your files!
+        
+        **Please enter your OpenAI API key in the sidebar to get started!**
+        """
+    )
+    
     st.stop()
 
 # 메모리를 session_state에 저장
