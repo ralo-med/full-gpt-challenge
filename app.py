@@ -266,7 +266,8 @@ def docs_to_context(docs):
     return "\n\n".join([doc.page_content for doc in docs])
 
 if file:
-    retriever = embed_and_retrieve(load_and_split(file), file)
+    with st.spinner("📄 문서를 처리하고 있습니다..."):
+        retriever = embed_and_retrieve(load_and_split(file), file)
 
     if retriever:
         st.success("🎉 파일이 성공적으로 처리되었습니다!")
