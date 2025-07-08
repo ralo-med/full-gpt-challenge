@@ -62,8 +62,8 @@ with st.sidebar:
             st.stop()
     else:
         # 배포 모드: 사용자 입력 받기
-        st.info("OPENAI API 키를 입력해주세요")
-        st.info("🔒 API 키 안전, 저장 안함")
+        st.info("API 키를 입력해주세요.")
+        st.write("🔒 API 키는 안전하며, 저장되지 않습니다.")
         api_key = st.text_input(
             "OpenAI API Key",
             type="password",
