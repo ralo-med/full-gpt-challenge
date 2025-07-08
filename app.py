@@ -120,9 +120,8 @@ with st.sidebar:
 
 # API 키가 설정되었는지 확인
 if api_key:
-    # 개발 모드일 때만 환경변수에 설정, 배포 모드에서는 직접 사용
-    if is_actual_dev_mode:
-        os.environ["OPENAI_API_KEY"] = api_key
+    # API 키가 입력되었으면 환경변수에 설정
+    os.environ["OPENAI_API_KEY"] = api_key
     llm = ChatOpenAI(
         model=model_name, 
         temperature=temperature, 
