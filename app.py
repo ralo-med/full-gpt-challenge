@@ -122,6 +122,20 @@ with st.sidebar:
 if api_key:
     # API 키가 입력되었으면 환경변수에 설정
     os.environ["OPENAI_API_KEY"] = api_key
+    
+    # API 키 유효성 확인 (가장 싼 모델, 최소 토큰)
+    try:
+        test_llm = ChatOpenAI(
+            model="gpt-3.5-turbo",
+            temperature=0,
+            max_tokens=1
+        )
+        test_llm.invoke("hi")
+    except Exception as e:
+        st.error(f"❌ API 키가 유효하지 않습니다: {str(e)}")
+        st.stop()
+    
+    # 실제 LLM 초기화
     llm = ChatOpenAI(
         model=model_name, 
         temperature=temperature, 
