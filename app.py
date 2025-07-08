@@ -63,6 +63,7 @@ with st.sidebar:
     else:
         # 배포 모드: 사용자 입력 받기
         st.info("API 키를 입력해주세요")
+        st.info("🔒 안전, 저장x 진짜임")
         api_key = st.text_input(
             "OpenAI API Key",
             type="password",
@@ -112,7 +113,7 @@ with st.sidebar:
         except Exception:
             pass
     
-    st.info("🔒 API 키는 안전합니다 - 서버에 저장되지 않습니다 진짜임")
+    
     
     st.divider()
     
