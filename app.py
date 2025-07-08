@@ -62,8 +62,8 @@ with st.sidebar:
             st.stop()
     else:
         # 배포 모드: 사용자 입력 받기
-        st.info("API 키를 입력해주세요")
-        st.info("🔒 안전, 저장x 진짜임")
+        st.info("OPENAI API 키를 입력해주세요")
+        st.info("🔒 API 키 안전, 저장 안함")
         api_key = st.text_input(
             "OpenAI API Key",
             type="password",
@@ -118,8 +118,8 @@ with st.sidebar:
     st.divider()
     
     st.write("소스코드")
-    st.markdown("[GitHub Repository](https://github.com/your-username/full-gpt-challenge)")
-    st.markdown("[Streamlit App Code](https://github.com/your-username/full-gpt-challenge/blob/main/home.py)")
+    st.markdown("[GitHub Repository](https://github.com/ralo-med/full-gpt-challenge)")
+    st.markdown("[Live App](https://full-gpt-challenge-wchmjbuyozz8xhnrgiatmb.streamlit.app/)")
 
 # API 키가 설정되었는지 확인
 if api_key:
