@@ -112,6 +112,8 @@ with st.sidebar:
         except Exception:
             pass
     
+    st.info("🔒 API 키는 안전합니다 - 서버에 저장되지 않습니다 진짜임")
+    
     st.divider()
     
     st.write("소스코드")
@@ -197,7 +199,12 @@ except Exception:
 @st.cache_data(show_spinner="Embedding file..." )
 def load_and_split(file):
     file_content = file.read()
-    file_path = f"./.cache/files/{file.name}"
+    
+    # 캐시 디렉토리 생성
+    cache_dir = "./.cache/files"
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    file_path = f"{cache_dir}/{file.name}"
     with open(file_path, "wb") as f:
         f.write(file_content)
     splitter = CharacterTextSplitter.from_tiktoken_encoder(
@@ -208,7 +215,11 @@ def load_and_split(file):
     return docs
 
 def embed_and_retrieve(docs, file):
-    cache_dir = LocalFileStore(f"./.cache/embeddings/{file.name}")
+    # 임베딩 캐시 디렉토리 생성
+    embedding_cache_dir = f"./.cache/embeddings/{file.name}"
+    os.makedirs(embedding_cache_dir, exist_ok=True)
+    
+    cache_dir = LocalFileStore(embedding_cache_dir)
     embeddings = OpenAIEmbeddings()
     cached_embeddings = CacheBackedEmbeddings.from_bytes_store(embeddings, cache_dir)
     vectorstore = FAISS.from_documents(docs, cached_embeddings)
