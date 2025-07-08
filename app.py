@@ -131,8 +131,13 @@ if api_key:
             max_tokens=1
         )
         test_llm.invoke("hi")
-    except Exception as e:
-        st.error(f"❌ API 키가 유효하지 않습니다: {str(e)}")
+    except Exception:
+        st.error("❌ Invalid API key. Please check your OpenAI API key.")
+        st.markdown(
+            """
+            Get your API key from [OpenAI Platform](https://platform.openai.com/account/api-keys)
+            """
+        )
         st.stop()
     
     # 실제 LLM 초기화
