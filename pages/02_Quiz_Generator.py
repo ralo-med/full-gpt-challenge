@@ -93,6 +93,9 @@ def generate_quiz_with_function_calling(docs, difficulty="easy"):
             
             Each question should have exactly 4 answers, with three incorrect answers and one correct answer.
             
+            IMPORTANT: Randomize the position of correct answers. Do not always put the correct answer in the first or second position. 
+            Distribute correct answers evenly across all 4 positions (1st, 2nd, 3rd, 4th) throughout the quiz.
+            
             {difficulty_instruction}
             
             Make sure the questions are diverse and test different aspects of the content.
@@ -143,7 +146,7 @@ st.set_page_config(
 st.title("QuizGPT")
 st.write("This is a quiz application built with Streamlit and OpenAI.")
 
-@st.cache_data(show_spinner="Splitting file..." )
+@st.cache_data(show_spinner=False)  # 스피너 제거
 def split_file(file):
     if not os.getenv("OPENAI_API_KEY"):
         st.error("❌ OpenAI API key is not set! Please set API key in Home page.")
@@ -168,7 +171,7 @@ def split_file(file):
     docs = splitter.split_documents(docs)
     return docs
 
-@st.cache_data(show_spinner="Generating quiz...")
+@st.cache_data(show_spinner=False)  # 스피너 제거
 def run_quiz(_docs, topic, difficulty="easy"):
     """Function calling을 사용하여 퀴즈를 생성합니다."""
     return generate_quiz_with_function_calling(_docs, difficulty)
@@ -245,20 +248,30 @@ else:
             for i, question in enumerate(result["questions"]):
                 st.write(f"**질문 {i+1}:** {question['question']}")
                 value = st.radio(
-                    "정답을 선택하세요",
+                    "",
                     [answer["answer"] for answer in question["answers"]],
                     key=f"question_{i}",
                     index=None
                 )
+                
+                # 각 질문 아래에 정답 체크 표시
                 if value is not None:
-                    if {"answer":value,"correct":True} in question["answers"]:
+                    correct_answer = next((ans["answer"] for ans in question["answers"] if ans["correct"]), None)
+                    if value == correct_answer:
                         st.success("✅ 정답입니다!")
                     else:
-                        st.error("❌ 틀렸습니다!")
+                        st.error(f"❌ 틀렸습니다!")
             
             submit = st.form_submit_button("퀴즈 제출")
             if submit:
-                st.write("퀴즈 결과:", result)
+                # 최종 결과만 표시
+                correct_count = sum(1 for i, question in enumerate(result["questions"]) 
+                                 if st.session_state.get(f"question_{i}") == 
+                                 next((ans["answer"] for ans in question["answers"] if ans["correct"]), None))
+                total_questions = len(result["questions"])
+                st.write(f"**최종 결과: {correct_count}/{total_questions} 정답**")
+                if correct_count == total_questions:
+                    st.balloons()
 
 
 
