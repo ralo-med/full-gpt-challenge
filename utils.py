@@ -18,7 +18,7 @@ def setup_sidebar():
             st.stop()
     else:
         # 배포 모드: 사용자 입력 받기
-        st.info("API 키를 입력해주세요.")
+        st.error("API 키를 입력해주세요.")
         st.write("API 키는 저장되지 않습니다.")
         api_key = st.text_input(
             "OpenAI API Key",
@@ -47,6 +47,7 @@ def setup_sidebar():
     
     st.divider()
     
+    # 소스코드 링크를 맨 아래로 이동
     st.write("소스코드")
     st.markdown("[GitHub Repository](https://github.com/ralo-med/full-gpt-challenge)")
     st.markdown("[Live App](https://full-gpt-challenge-wchmjbuyozz8xhnrgiatmb.streamlit.app/)")
