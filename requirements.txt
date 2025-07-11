@@ -8,3 +8,13 @@ unstructured
 faiss-cpu
 tiktoken
 pydantic>=2.0.0,<3.0.0
+wikipedia
+langchain
+langchain-embeddings
+langchain-vectorstores
+langchain-memory
+langchain-retrievers
+python-docx
+pdfplumber
+pdf2image
+pytesseract
