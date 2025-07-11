@@ -229,16 +229,35 @@ else:
     )
     
     # 퀴즈 생성 버튼
-    if st.button("Generate Quiz", type="secondary"):
-        with st.spinner("퀴즈를 생성하고 있습니다..."):
-            result = run_quiz(docs, topic if 'topic' in locals() and topic else file.name if 'file' in locals() else "unknown", difficulty)
-            
-            if result and "questions" in result:
-                # 세션 상태에 결과 저장
-                st.session_state.quiz_result = result
-                st.success("퀴즈가 성공적으로 생성되었습니다!")
-            else:
-                st.error("퀴즈 생성에 실패했습니다. 다시 시도해주세요.")
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        if st.button("Generate Quiz", type="secondary"):
+            with st.spinner("퀴즈를 생성하고 있습니다..."):
+                result = run_quiz(docs, topic if 'topic' in locals() and topic else file.name if 'file' in locals() else "unknown", difficulty)
+                
+                if result and "questions" in result:
+                    st.session_state.quiz_result = result
+                    st.success("퀴즈가 성공적으로 생성되었습니다!")
+                else:
+                    st.error("퀴즈 생성에 실패했습니다. 다시 시도해주세요.")
+
+    with col2:
+        if st.button("New Quiz", type="secondary"):
+            # 캐시 무효화
+            run_quiz.clear()
+            # 기존 퀴즈 결과 삭제
+            if 'quiz_result' in st.session_state:
+                del st.session_state.quiz_result
+            # 새로운 퀴즈 자동 생성
+            with st.spinner("새로운 퀴즈를 생성하고 있습니다..."):
+                result = run_quiz(docs, topic if 'topic' in locals() and topic else file.name if 'file' in locals() else "unknown", difficulty)
+                
+                if result and "questions" in result:
+                    st.session_state.quiz_result = result
+                    st.success("새로운 퀴즈가 성공적으로 생성되었습니다!")
+                else:
+                    st.error("퀴즈 생성에 실패했습니다. 다시 시도해주세요.")
+            st.rerun()
     
     # 퀴즈 표시 (생성된 경우에만)
     if hasattr(st.session_state, 'quiz_result') and st.session_state.quiz_result:
