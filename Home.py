@@ -10,15 +10,11 @@ st.set_page_config(
 
 # 사이드바에서 설정
 with st.sidebar:
-    # API 키 유효성 검사를 먼저 수행
+    # 공통 사이드바 설정 (API 키 검사 포함)
     api_key, model_name, temperature = setup_sidebar()
     
-    # API 키 유효성 검사
-    if not validate_api_key(api_key):
-        st.error("❌ Please enter your OpenAI API key!")
-        st.stop()
-    else:
-        # 설정을 세션 상태에 저장
+    # API 키가 있을 때만 설정을 세션 상태에 저장
+    if api_key:
         save_settings_to_session(api_key, model_name, temperature)
 
 # 메인 콘텐츠

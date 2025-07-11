@@ -15,17 +15,22 @@ def setup_sidebar():
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             st.error("❌ 개발 모드에서 OPENAI_API_KEY 환경변수가 설정되지 않았습니다!")
-            st.stop()
+            return None, None, None
     else:
         # 배포 모드: 사용자 입력 받기
-        st.error("API 키를 입력해주세요.")
-        st.write("API 키는 저장되지 않습니다.")
+        st.info("API 키를 입력해주세요.")
         api_key = st.text_input(
             "OpenAI API Key",
             type="password",
             placeholder="sk-...",
             help="OpenAI API 키를 입력하세요"
         )
+        st.write("API 키는 저장되지 않습니다.")
+        
+        # API 키 유효성 검사를 여기서 즉시 수행
+        if not validate_api_key(api_key):
+            st.error("❌ Please enter your OpenAI API key!")
+            return None, None, None
 
     # 모델 선택
     model_name = st.selectbox(

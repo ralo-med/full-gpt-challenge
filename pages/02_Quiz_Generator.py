@@ -10,6 +10,16 @@ from langchain.schema import BaseOutputParser, output_parser
 import json
 from utils import setup_sidebar, validate_api_key, save_settings_to_session, create_llm
 
+st.set_page_config(
+    page_title="QuizGPT",
+    page_icon="🤔",
+    layout="wide",
+)
+
+# API 키가 설정되었는지 확인 (페이지 제일 위에 표시)
+if not os.getenv("OPENAI_API_KEY"):
+    st.error("❌ OpenAI API key is not set! Please set API key in sidebar.")
+
 # Function calling을 위한 스키마 정의
 quiz_schema = {
     "type": "object",
@@ -53,7 +63,11 @@ def format_docs(docs):
 model_name = "gpt-4.1-nano"
 temperature = 0.1
 
-llm = create_llm(model_name, temperature, [StreamingStdOutCallbackHandler()])
+# API 키가 있을 때만 LLM 초기화
+if os.getenv("OPENAI_API_KEY"):
+    llm = create_llm(model_name, temperature, [StreamingStdOutCallbackHandler()])
+else:
+    llm = None
 
 # Function calling을 활용한 퀴즈 생성 프롬프트
 quiz_generation_prompt = ChatPromptTemplate.from_messages([
@@ -75,6 +89,10 @@ quiz_generation_prompt = ChatPromptTemplate.from_messages([
 # Function calling을 활용한 퀴즈 생성 함수 (난이도 추가)
 def generate_quiz_with_function_calling(docs, difficulty="easy"):
     """Function calling을 사용하여 퀴즈를 생성합니다."""
+    if not os.getenv("OPENAI_API_KEY"):
+        st.error("API 키를 설정해주세요.")
+        return {"questions": []}
+    
     try:
         # 난이도별 프롬프트 설정
         difficulty_prompts = {
@@ -137,21 +155,11 @@ def generate_quiz_with_function_calling(docs, difficulty="easy"):
         st.error(f"퀴즈 생성 중 오류가 발생했습니다: {str(e)}")
         return {"questions": []}
 
-st.set_page_config(
-    page_title="QuizGPT",
-    page_icon="🤔",
-    layout="wide",
-)
-
 st.title("QuizGPT")
 st.write("This is a quiz application built with Streamlit and OpenAI.")
 
 @st.cache_data(show_spinner=False)  # 스피너 제거
 def split_file(file):
-    if not os.getenv("OPENAI_API_KEY"):
-        st.error("❌ OpenAI API key is not set! Please set API key in Home page.")
-        return None
-    
     os.makedirs("./.cache/quiz_files", exist_ok=True)
     os.makedirs("./.cache/quiz_embeddings", exist_ok=True)
     
@@ -205,12 +213,9 @@ with st.sidebar:
     # 공통 사이드바 설정
     api_key, model_name, temperature = setup_sidebar()
 
-    # API 키 유효성 검사
-    if validate_api_key(api_key):
+    # API 키가 있을 때만 설정을 세션 상태에 저장
+    if api_key:
         save_settings_to_session(api_key, model_name, temperature)
-    else:
-        st.error("❌ Please enter your OpenAI API key!")
-        st.stop()
 
 if not docs:
      st.markdown("""Welcome to QuizGQP.           
@@ -232,32 +237,38 @@ else:
     col1, col2 = st.columns([2, 1])
     with col1:
         if st.button("Generate Quiz", type="secondary"):
-            with st.spinner("퀴즈를 생성하고 있습니다..."):
-                result = run_quiz(docs, topic if 'topic' in locals() and topic else file.name if 'file' in locals() else "unknown", difficulty)
-                
-                if result and "questions" in result:
-                    st.session_state.quiz_result = result
-                    st.success("퀴즈가 성공적으로 생성되었습니다!")
-                else:
-                    st.error("퀴즈 생성에 실패했습니다. 다시 시도해주세요.")
+            if not os.getenv("OPENAI_API_KEY"):
+                st.error("API 키를 설정해주세요.")
+            else:
+                with st.spinner("퀴즈를 생성하고 있습니다..."):
+                    result = run_quiz(docs, topic if 'topic' in locals() and topic else file.name if 'file' in locals() else "unknown", difficulty)
+                    
+                    if result and "questions" in result:
+                        st.session_state.quiz_result = result
+                        st.success("퀴즈가 성공적으로 생성되었습니다!")
+                    else:
+                        st.error("퀴즈 생성에 실패했습니다. 다시 시도해주세요.")
 
     with col2:
         if st.button("New Quiz", type="secondary"):
-            # 캐시 무효화
-            run_quiz.clear()
-            # 기존 퀴즈 결과 삭제
-            if 'quiz_result' in st.session_state:
-                del st.session_state.quiz_result
-            # 새로운 퀴즈 자동 생성
-            with st.spinner("새로운 퀴즈를 생성하고 있습니다..."):
-                result = run_quiz(docs, topic if 'topic' in locals() and topic else file.name if 'file' in locals() else "unknown", difficulty)
-                
-                if result and "questions" in result:
-                    st.session_state.quiz_result = result
-                    st.success("새로운 퀴즈가 성공적으로 생성되었습니다!")
-                else:
-                    st.error("퀴즈 생성에 실패했습니다. 다시 시도해주세요.")
-            st.rerun()
+            if not os.getenv("OPENAI_API_KEY"):
+                st.error("API 키를 설정해주세요.")
+            else:
+                # 캐시 무효화
+                run_quiz.clear()
+                # 기존 퀴즈 결과 삭제
+                if 'quiz_result' in st.session_state:
+                    del st.session_state.quiz_result
+                # 새로운 퀴즈 자동 생성
+                with st.spinner("새로운 퀴즈를 생성하고 있습니다..."):
+                    result = run_quiz(docs, topic if 'topic' in locals() and topic else file.name if 'file' in locals() else "unknown", difficulty)
+                    
+                    if result and "questions" in result:
+                        st.session_state.quiz_result = result
+                        st.success("새로운 퀴즈가 성공적으로 생성되었습니다!")
+                    else:
+                        st.error("퀴즈 생성에 실패했습니다. 다시 시도해주세요.")
+                st.rerun()
     
     # 퀴즈 표시 (생성된 경우에만)
     if hasattr(st.session_state, 'quiz_result') and st.session_state.quiz_result:
