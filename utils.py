@@ -1,14 +1,18 @@
 import streamlit as st
 import os
 from langchain.chat_models import ChatOpenAI
+from dotenv import load_dotenv
+
+# .env 파일 로드
+load_dotenv()
 
 def setup_sidebar():
     """공통 사이드바 설정"""
     st.write("설정")
     
-    # 실제 개발 환경인지 확인 (환경변수에 DEV_MODE가 설정되어 있는지 확인)
-    # 강제로 false로 설정
-    is_actual_dev_mode = False
+    # .env 파일에서 DEV_MODE 읽기
+    dev_mode = os.getenv("DEV_MODE", "False").lower() == "true"
+    is_actual_dev_mode = dev_mode
     
     # 실제 개발 모드일 때만 환경변수 사용
     if is_actual_dev_mode:

@@ -15,11 +15,12 @@ import re
 import os
 from utils import setup_page_with_sidebar, create_llm_safe
 
-# 페이지 설정과 사이드바 설정
-api_key, model_name, temperature = setup_page_with_sidebar("SiteGPT", "🌐", "wide")
-
-# 안전한 LLM 생성
-llm = create_llm_safe(model_name, temperature)
+# 페이지 설정
+st.set_page_config(
+    page_title="SiteGPT",
+    page_icon="🌐",
+    layout="wide",
+)
 
 answers_prompt = ChatPromptTemplate.from_template(
     """
@@ -130,6 +131,7 @@ def choose_answer(inputs):
 
 @st.cache_resource(show_spinner="Loading sitemap...", ttl=3600)
 def load_sitemap(url):
+    """사이트맵을 로드하고 벡터 스토어를 생성합니다. URL을 캐시 키로 사용합니다."""
     import urllib3
     import requests
     from requests.adapters import HTTPAdapter
@@ -167,23 +169,27 @@ def load_sitemap(url):
 st.title("SiteGPT")
 st.write("Cloudflare AI 제품 문서 질의응답")
 
+
 st.markdown("""
 이 시스템은 Cloudflare의 AI Gateway, Vectorize, Workers AI 제품에 대한 질문을 답변할 수 있습니다:
 - **AI Gateway**: AI 모델 API 통합 및 관리
 - **Vectorize**: 벡터 데이터베이스 및 임베딩 서비스  
 - **Workers AI**: 서버리스 AI 추론 서비스
 
-Cloudflare 공식 문서가 로드되어 있습니다.
+Cloudflare 공식 문서가 자동으로 로드됩니다.
 """)
 
 with st.sidebar:
     # 공통 사이드바 설정
-    from utils import setup_sidebar, save_settings_to_session
+    from utils import setup_sidebar, save_settings_to_session, create_llm_safe
     api_key, model_name, temperature = setup_sidebar()
     
     # API 키가 있을 때만 설정을 세션 상태에 저장
     if api_key:
         save_settings_to_session(api_key, model_name, temperature)
+    
+    # 안전한 LLM 생성
+    llm = create_llm_safe(model_name, temperature)
     
     st.divider()
     
@@ -194,7 +200,8 @@ with st.sidebar:
 if url:
     if url.endswith(".xml"):
         if st.button("🔄 다시 로드", key="reload_button"):
-            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.success("캐시가 지워졌습니다. 페이지를 새로고침하세요.")
         
         try:
             retriever = load_sitemap(url)
@@ -219,6 +226,7 @@ if url:
                     st.write(result.content)
         except Exception as e:
             st.error(f"❌ 사이트맵 로딩 중 오류가 발생했습니다: {str(e)}")
+            st.info("💡 팁: 네트워크 연결을 확인하거나 잠시 후 다시 시도해보세요.")
     else:
         with st.sidebar:
             st.error("Please enter a Sitemap URL.")
