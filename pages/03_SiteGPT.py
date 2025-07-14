@@ -130,8 +130,8 @@ def choose_answer(inputs):
     return choose_chain.invoke({'answers': condensed_answer, 'question': question})
 
 @st.cache_resource(show_spinner="Loading sitemap...", ttl=3600)
-def load_sitemap(url):
-    """사이트맵을 로드하고 벡터 스토어를 생성합니다. URL을 캐시 키로 사용합니다."""
+def load_sitemap_docs(url):
+    """사이트맵을 로드하고 문서를 분할합니다. API 키가 필요하지 않습니다."""
     import urllib3
     import requests
     from requests.adapters import HTTPAdapter
@@ -163,8 +163,20 @@ def load_sitemap(url):
     loader.requests_per_second = 10  # 속도 조절
     docs = loader.load()
     split_docs = text_splitter.split_documents(docs)
-    vectorstore = FAISS.from_documents(split_docs, OpenAIEmbeddings())
-    return vectorstore.as_retriever()
+    return split_docs
+
+def create_retriever(docs):
+    """분할된 문서로부터 벡터 스토어와 리트리버를 생성합니다. API 키가 필요합니다."""
+    try:
+        vectorstore = FAISS.from_documents(docs, OpenAIEmbeddings())
+        return vectorstore.as_retriever()
+    except Exception as e:
+        if "api_key" in str(e).lower() or "openai_api_key" in str(e).lower():
+            st.error("❌ OpenAI API 키가 필요합니다. 사이드바에서 API 키를 입력해주세요.")
+            st.info("💡 사이트맵은 로드되었지만, 임베딩 생성을 위해 API 키가 필요합니다.")
+        else:
+            st.error(f"❌ 임베딩 생성 중 오류가 발생했습니다: {str(e)}")
+        return None
 
 st.title("SiteGPT")
 st.write("Cloudflare AI 제품 문서 질의응답")
@@ -204,26 +216,37 @@ if url:
             st.success("캐시가 지워졌습니다. 페이지를 새로고침하세요.")
         
         try:
-            retriever = load_sitemap(url)
-            query = st.text_input("질문을 입력하세요:", key="query")
-            if query:
-                if llm is None:
-                    st.error("API 키를 설정해주세요.")
-                else:
-                    # 문서 검색 - 모든 관련 문서 검색
-                    docs = retriever.invoke(query)
-                    
-                    chain = (
-                        {
-                            "docs": lambda x: docs,
-                            "question": RunnablePassthrough(),
-                        }
-                        | RunnableLambda(get_answer)
-                        | RunnableLambda(choose_answer)
-                    )
-                    result = chain.invoke({"question": query})
-                    st.write("**답변:**")
-                    st.write(result.content)
+            # 1단계: 사이트맵 로딩 (API 키 불필요)
+            docs = load_sitemap_docs(url)
+            st.success("✅ 사이트맵 로딩 완료!")
+            
+            # 2단계: 임베딩 생성 (API 키 필요)
+            retriever = create_retriever(docs)
+            
+            if retriever:
+                query = st.text_input("질문을 입력하세요:", key="query")
+                if query:
+                    if llm is None:
+                        st.error("API 키를 설정해주세요.")
+                    else:
+                        # 문서 검색 - 모든 관련 문서 검색
+                        docs = retriever.invoke(query)
+                        
+                        chain = (
+                            {
+                                "docs": lambda x: docs,
+                                "question": RunnablePassthrough(),
+                            }
+                            | RunnableLambda(get_answer)
+                            | RunnableLambda(choose_answer)
+                        )
+                        result = chain.invoke({"question": query})
+                        st.write("**답변:**")
+                        st.write(result.content)
+            else:
+                st.warning("⚠️ 임베딩이 생성되지 않아 질의응답을 사용할 수 없습니다.")
+                st.info("💡 사이드바에서 OpenAI API 키를 입력한 후 페이지를 새로고침하세요.")
+                
         except Exception as e:
             st.error(f"❌ 사이트맵 로딩 중 오류가 발생했습니다: {str(e)}")
             st.info("💡 팁: 네트워크 연결을 확인하거나 잠시 후 다시 시도해보세요.")
