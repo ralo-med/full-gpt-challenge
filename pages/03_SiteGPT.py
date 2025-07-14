@@ -12,7 +12,14 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.runnable import RunnableLambda
 import re
-llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.1)
+import os
+from utils import setup_page_with_sidebar, create_llm_safe
+
+# 페이지 설정과 사이드바 설정
+api_key, model_name, temperature = setup_page_with_sidebar("SiteGPT", "🌐", "wide")
+
+# 안전한 LLM 생성
+llm = create_llm_safe(model_name, temperature)
 
 answers_prompt = ChatPromptTemplate.from_template(
     """
@@ -60,12 +67,6 @@ choose_prompt = ChatPromptTemplate.from_messages(
     ]
 )
 
-st.set_page_config(
-    page_title="SiteGPT",
-    page_icon="🌐",
-    layout="wide",
-)
-
 html2text_transformer = Html2TextTransformer()
 
 def parse_page(soup):
@@ -83,6 +84,10 @@ def extract_score(text):
     return float(match.group(1)) if match else 0.0
 
 def get_answer(inputs):
+    if llm is None:
+        st.error("API 키를 설정해주세요.")
+        return {"question": inputs["question"], "answer": []}
+    
     question = inputs["question"]
     docs = inputs["docs"]
 
@@ -109,8 +114,13 @@ def get_answer(inputs):
     return {"question": question, "answer": answers}
 
 def choose_answer(inputs):
+    if llm is None:
+        st.error("API 키를 설정해주세요.")
+        return type('obj', (object,), {'content': 'API 키를 설정해주세요.'})
+    
     question = inputs['question']
     answers = inputs['answer']
+    
     choose_chain = choose_prompt | llm
     condensed_answer = '\n\n'.join(
         f"{answer['answer']}\nSource: {answer['source']}\nDate: {answer['date']}\nScore: {answer['score']}\n\n"
@@ -157,6 +167,15 @@ def load_sitemap(url):
 st.title("SiteGPT")
 st.write("Cloudflare AI 제품 문서 질의응답")
 
+st.markdown("""
+이 시스템은 Cloudflare의 AI Gateway, Vectorize, Workers AI 제품에 대한 질문을 답변할 수 있습니다:
+- **AI Gateway**: AI 모델 API 통합 및 관리
+- **Vectorize**: 벡터 데이터베이스 및 임베딩 서비스  
+- **Workers AI**: 서버리스 AI 추론 서비스
+
+Cloudflare 공식 문서가 로드되어 있습니다.
+""")
+
 with st.sidebar:
     st.write("Cloudflare 공식 문서")
     url = "https://developers.cloudflare.com/sitemap-0.xml"
@@ -170,21 +189,24 @@ if url:
         try:
             retriever = load_sitemap(url)
             query = st.text_input("질문을 입력하세요:", key="query")
-            if query:       
-                # 문서 검색 - 모든 관련 문서 검색
-                docs = retriever.invoke(query)
-                
-                chain = (
-                    {
-                        "docs": lambda x: docs,
-                        "question": RunnablePassthrough(),
-                    }
-                    | RunnableLambda(get_answer)
-                    | RunnableLambda(choose_answer)
-                )
-                result = chain.invoke({"question": query})
-                st.write("**답변:**")
-                st.write(result.content)
+            if query:
+                if llm is None:
+                    st.error("API 키를 설정해주세요.")
+                else:
+                    # 문서 검색 - 모든 관련 문서 검색
+                    docs = retriever.invoke(query)
+                    
+                    chain = (
+                        {
+                            "docs": lambda x: docs,
+                            "question": RunnablePassthrough(),
+                        }
+                        | RunnableLambda(get_answer)
+                        | RunnableLambda(choose_answer)
+                    )
+                    result = chain.invoke({"question": query})
+                    st.write("**답변:**")
+                    st.write(result.content)
         except Exception as e:
             st.error(f"❌ 사이트맵 로딩 중 오류가 발생했습니다: {str(e)}")
     else:

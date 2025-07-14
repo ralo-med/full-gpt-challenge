@@ -8,17 +8,10 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.callbacks import StreamingStdOutCallbackHandler
 from langchain.schema import BaseOutputParser, output_parser
 import json
-from utils import setup_sidebar, validate_api_key, save_settings_to_session, create_llm
+from utils import setup_page_with_sidebar, create_llm_safe
 
-st.set_page_config(
-    page_title="QuizGPT",
-    page_icon="🤔",
-    layout="wide",
-)
-
-# API 키가 설정되었는지 확인 (페이지 제일 위에 표시)
-if not os.getenv("OPENAI_API_KEY"):
-    st.error("❌ OpenAI API key is not set! Please set API key in sidebar.")
+# 페이지 설정과 사이드바 설정
+api_key, model_name, temperature = setup_page_with_sidebar("QuizGPT", "🤔", "wide")
 
 # Function calling을 위한 스키마 정의
 quiz_schema = {
@@ -59,15 +52,8 @@ output_parser = JsonOutputParser()
 def format_docs(docs):
     return "\n\n".join([doc.page_content for doc in docs])
 
-# 초기 설정 (나중에 사이드바에서 업데이트됨)
-model_name = "gpt-4.1-nano"
-temperature = 0.1
-
-# API 키가 있을 때만 LLM 초기화
-if os.getenv("OPENAI_API_KEY"):
-    llm = create_llm(model_name, temperature, [StreamingStdOutCallbackHandler()])
-else:
-    llm = None
+# 안전한 LLM 생성
+llm = create_llm_safe(model_name, temperature, [StreamingStdOutCallbackHandler()])
 
 # Function calling을 활용한 퀴즈 생성 프롬프트
 quiz_generation_prompt = ChatPromptTemplate.from_messages([
@@ -89,7 +75,7 @@ quiz_generation_prompt = ChatPromptTemplate.from_messages([
 # Function calling을 활용한 퀴즈 생성 함수 (난이도 추가)
 def generate_quiz_with_function_calling(docs, difficulty="easy"):
     """Function calling을 사용하여 퀴즈를 생성합니다."""
-    if not os.getenv("OPENAI_API_KEY"):
+    if llm is None:
         st.error("API 키를 설정해주세요.")
         return {"questions": []}
     
@@ -208,14 +194,7 @@ with st.sidebar:
             if docs:
                 st.success("완료! 퀴즈 생성을 눌러주세요.")
     
-    st.divider()
-    
-    # 공통 사이드바 설정
-    api_key, model_name, temperature = setup_sidebar()
 
-    # API 키가 있을 때만 설정을 세션 상태에 저장
-    if api_key:
-        save_settings_to_session(api_key, model_name, temperature)
 
 if not docs:
      st.markdown("""Welcome to QuizGQP.           
@@ -237,7 +216,7 @@ else:
     col1, col2 = st.columns([2, 1])
     with col1:
         if st.button("Generate Quiz", type="secondary"):
-            if not os.getenv("OPENAI_API_KEY"):
+            if llm is None:
                 st.error("API 키를 설정해주세요.")
             else:
                 with st.spinner("퀴즈를 생성하고 있습니다..."):
@@ -251,7 +230,7 @@ else:
 
     with col2:
         if st.button("New Quiz", type="secondary"):
-            if not os.getenv("OPENAI_API_KEY"):
+            if llm is None:
                 st.error("API 키를 설정해주세요.")
             else:
                 # 캐시 무효화

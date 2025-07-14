@@ -12,17 +12,10 @@ from langchain.chat_models import ChatOpenAI
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import MessagesPlaceholder
-from utils import setup_sidebar, validate_api_key, save_settings_to_session, create_llm
+from utils import setup_page_with_sidebar, create_llm_safe
 
-st.set_page_config(
-    page_title="Streamlit is 🔥",
-    page_icon="🔥",
-    layout="wide",
-)
-
-# API 키가 설정되었는지 확인 (페이지 제일 위에 표시)
-if not os.getenv("OPENAI_API_KEY"):
-    st.error("❌ OpenAI API key is not set! Please set API key in sidebar.")
+# 페이지 설정과 사이드바 설정
+api_key, model_name, temperature = setup_page_with_sidebar("DocumentGPT", "🔥", "wide")
 
 class ChatCallbackHandler(BaseCallbackHandler):
 
@@ -71,40 +64,32 @@ with st.sidebar:
         except Exception:
             pass
     
-    st.divider()
-    
-    # 공통 사이드바 설정
-    api_key, model_name, temperature = setup_sidebar()
 
-    # API 키가 있을 때만 설정을 세션 상태에 저장
-    if api_key:
-        save_settings_to_session(api_key, model_name, temperature)
 
 # API 키가 있을 때만 LLM 초기화 및 메모리 설정
-if os.getenv("OPENAI_API_KEY"):
-    # 실제 LLM 초기화
-    llm = create_llm(model_name, temperature, [ChatCallbackHandler()])
+llm = create_llm_safe(model_name, temperature, [ChatCallbackHandler()])
 
-    # 메모리를 session_state에 저장
-    if "memory" not in st.session_state:
-        try:
-            st.session_state.memory = ConversationBufferMemory(
-                llm=llm,
-                max_token_limit=120,
-                return_messages=True,
-                memory_key="history"
-            )
-        except Exception:
-            pass
-
-    # messages도 session_state에 저장
-    if "messages" not in st.session_state:
-        st.session_state["messages"] = []
-
-    # memory 변수 안전하게 할당
+# 메모리를 session_state에 저장
+if "memory" not in st.session_state and llm is not None:
     try:
-        memory = st.session_state.memory
+        st.session_state.memory = ConversationBufferMemory(
+            llm=llm,
+            max_token_limit=120,
+            return_messages=True,
+            memory_key="history"
+        )
     except Exception:
+        pass
+
+# messages도 session_state에 저장
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
+
+# memory 변수 안전하게 할당
+try:
+    memory = st.session_state.memory
+except Exception:
+    if llm is not None:
         memory = ConversationBufferMemory(
             llm=llm,
             max_token_limit=120,
@@ -112,6 +97,8 @@ if os.getenv("OPENAI_API_KEY"):
             memory_key="history"
         )
         st.session_state.memory = memory
+    else:
+        memory = None
 
 @st.cache_data(show_spinner="Embedding file..." )
 def load_and_split(file):
@@ -182,7 +169,7 @@ def docs_to_context(docs):
     return "\n\n".join([doc.page_content for doc in docs])
 
 if file:
-    if not os.getenv("OPENAI_API_KEY"):
+    if llm is None:
         st.warning("API 키를 설정해주세요.")
     else:
         with st.spinner("📄 문서를 처리하고 있습니다..."):

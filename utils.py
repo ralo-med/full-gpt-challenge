@@ -107,3 +107,36 @@ def create_llm(model_name, temperature, callbacks=None):
         streaming=True,
         callbacks=callbacks
     ) 
+
+def check_api_key():
+    """API 키가 설정되었는지 확인하고 오류 메시지 표시"""
+    if not os.getenv("OPENAI_API_KEY"):
+        st.error("❌ OpenAI API key is not set! Please set API key in sidebar.")
+        return False
+    return True
+
+def setup_page_with_sidebar(title, icon="🔥", layout="wide"):
+    """페이지 설정과 사이드바를 한 번에 설정"""
+    st.set_page_config(
+        page_title=title,
+        page_icon=icon,
+        layout=layout,
+    )
+    
+    # API 키 체크
+    check_api_key()
+    
+    # 사이드바 설정
+    api_key, model_name, temperature = setup_sidebar()
+    
+    # API 키가 있을 때만 설정을 세션 상태에 저장
+    if api_key:
+        save_settings_to_session(api_key, model_name, temperature)
+    
+    return api_key, model_name, temperature
+
+def create_llm_safe(model_name, temperature, callbacks=None):
+    """안전한 LLM 생성 (API 키 체크 포함)"""
+    if not os.getenv("OPENAI_API_KEY"):
+        return None
+    return create_llm(model_name, temperature, callbacks)
