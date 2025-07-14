@@ -177,6 +177,16 @@ Cloudflare 공식 문서가 로드되어 있습니다.
 """)
 
 with st.sidebar:
+    # 공통 사이드바 설정
+    from utils import setup_sidebar, save_settings_to_session
+    api_key, model_name, temperature = setup_sidebar()
+    
+    # API 키가 있을 때만 설정을 세션 상태에 저장
+    if api_key:
+        save_settings_to_session(api_key, model_name, temperature)
+    
+    st.divider()
+    
     st.write("Cloudflare 공식 문서")
     url = "https://developers.cloudflare.com/sitemap-0.xml"
     st.info(f"📄 사이트맵: {url}")

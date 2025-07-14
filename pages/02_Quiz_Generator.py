@@ -175,8 +175,18 @@ def run_wikipedia_quiz(topic):
     docs = retrieval.get_relevant_documents(topic)
     return docs
 
-# 퀴즈 생성 메인 로직
+# 사이드바 설정 (네비게이션 바로 아래)
 with st.sidebar:
+    # 공통 사이드바 설정
+    from utils import setup_sidebar, save_settings_to_session
+    api_key, model_name, temperature = setup_sidebar()
+    
+    # API 키가 있을 때만 설정을 세션 상태에 저장
+    if api_key:
+        save_settings_to_session(api_key, model_name, temperature)
+    
+    st.divider()
+    
     st.write("퀴즈 소스 선택")
     docs = None
     choice = st.selectbox("퀴즈를 생성할 소스를 선택하세요",("File","Wikipedia Article"))

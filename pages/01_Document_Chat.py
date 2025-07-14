@@ -44,8 +44,18 @@ class ChatCallbackHandler(BaseCallbackHandler):
         except Exception:
             pass
 
-# 사이드바에서 파일 업로드
+# 사이드바 설정 (네비게이션 바로 아래)
 with st.sidebar:
+    # 공통 사이드바 설정
+    from utils import setup_sidebar, save_settings_to_session
+    api_key, model_name, temperature = setup_sidebar()
+    
+    # API 키가 있을 때만 설정을 세션 상태에 저장
+    if api_key:
+        save_settings_to_session(api_key, model_name, temperature)
+    
+    st.divider()
+    
     st.write("파일 업로드")
     file = st.file_uploader(
         "Upload a .txt .pdf or .docx file",

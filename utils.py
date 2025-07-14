@@ -7,7 +7,8 @@ def setup_sidebar():
     st.write("설정")
     
     # 실제 개발 환경인지 확인 (환경변수에 DEV_MODE가 설정되어 있는지 확인)
-    is_actual_dev_mode = os.getenv("DEV_MODE", "false") == "true"
+    # 강제로 false로 설정
+    is_actual_dev_mode = False
     
     # 실제 개발 모드일 때만 환경변수 사용
     if is_actual_dev_mode:
@@ -126,14 +127,8 @@ def setup_page_with_sidebar(title, icon="🔥", layout="wide"):
     # API 키 체크
     check_api_key()
     
-    # 사이드바 설정
-    api_key, model_name, temperature = setup_sidebar()
-    
-    # API 키가 있을 때만 설정을 세션 상태에 저장
-    if api_key:
-        save_settings_to_session(api_key, model_name, temperature)
-    
-    return api_key, model_name, temperature
+    # 사이드바 설정은 각 페이지에서 직접 호출하도록 변경
+    return None, None, None
 
 def create_llm_safe(model_name, temperature, callbacks=None):
     """안전한 LLM 생성 (API 키 체크 포함)"""
