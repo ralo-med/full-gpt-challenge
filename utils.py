@@ -39,13 +39,17 @@ def setup_sidebar():
             st.sidebar.success("✅ API 키가 저장되었습니다.")
 
             def _update_key():
-                st.session_state.api_key = st.session_state.new_api_key or ""
+                # 사용자가 실제로 무언가 입력한 경우에만 변경
+                new_val = st.session_state.get("new_api_key", "").strip()
+                if new_val:                      # ← 비어있지 않을 때만
+                    st.session_state.api_key = new_val
 
             with st.expander("🔑 API Key 변경"):
                 st.text_input(
                     "새 API 키를 입력하세요.",
                     type="password",
                     key="new_api_key",
+                    value=st.session_state.api_key,   # ← 현재 저장된 키를 기본값으로 표시
                     help="입력 후 Enter 를 누르세요.",
                     on_change=_update_key,
                 )
