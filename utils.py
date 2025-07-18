@@ -55,9 +55,9 @@ def setup_sidebar():
 
         # API 키 삭제(로그아웃) 버튼
         if st.session_state.api_key:
-            if st.sidebar.button("❌ API 키 삭제", key="clear_api_key"):
+            def _clear_key():
                 st.session_state.api_key = ""
-                st.experimental_rerun()
+            st.sidebar.button("❌ API 키 삭제", key="clear_api_key", on_click=_clear_key)
 
     st.sidebar.header("모델 설정")
     st.sidebar.selectbox(

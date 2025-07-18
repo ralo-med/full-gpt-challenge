@@ -319,8 +319,6 @@ if st.session_state.get("api_key"):
         client = OpenAI(api_key=st.session_state.get("api_key"))
     except Exception as e:
         st.error(f"❌ OpenAI 클라이언트 생성 중 오류: {str(e)}")
-else:
-    st.warning("❗️ OpenAI API 키를 사이드바에서 입력해주세요.")
 
 if "history" not in st.session_state:
     st.session_state.history = [{"role": "system", "content": SYSTEM_PROMPT}]
