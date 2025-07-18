@@ -37,7 +37,6 @@ def setup_sidebar():
         # 공통 입력창: 세션에 이미 키가 있으면 자동 채워짐 (비밀번호 형식이라 ●●● 표시)
         st.sidebar.text_input(
             "OpenAI API Key",
-            type="password",
             key="api_key",      # 동일 키로 모든 페이지에서 공유
             help="세션 동안 유지됩니다.",
         )
@@ -68,6 +67,9 @@ def setup_sidebar():
     )
 
     # st.session_state에서 직접 값을 반환합니다.
+    if st.session_state.api_key:
+        os.environ["OPENAI_API_KEY"] = st.session_state.api_key
+
     return (
         st.session_state.api_key,
         st.session_state.model_name,
@@ -75,9 +77,3 @@ def setup_sidebar():
     )
 
 
-def save_settings_to_session(api_key, model_name, temperature):
-    """
-    이 함수는 이제 위젯 키 사용으로 인해 중복됩니다.
-    호환성을 위해 남겨두지만 아무 작업도 수행하지 않습니다.
-    """
-    pass
