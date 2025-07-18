@@ -34,37 +34,16 @@ def setup_sidebar():
         if dev_mode:
             st.sidebar.warning("개발 모드이지만 .env에 API 키가 없습니다.")
 
-        if st.session_state.api_key:
-            # 이미 키가 저장됨 → 메시지만 표시하고, 수정하려면 expander 사용
-            st.sidebar.success("✅ API 키가 저장되었습니다.")
+        # 공통 입력창: 세션에 이미 키가 있으면 자동 채워짐 (비밀번호 형식이라 ●●● 표시)
+        st.sidebar.text_input(
+            "OpenAI API Key",
+            type="password",
+            key="api_key",      # 동일 키로 모든 페이지에서 공유
+            help="세션 동안 유지됩니다.",
+        )
 
-            def _update_key():
-                # 사용자가 실제로 무언가 입력한 경우에만 변경
-                new_val = st.session_state.get("new_api_key", "").strip()
-                if new_val:                      # ← 비어있지 않을 때만
-                    st.session_state.api_key = new_val
-
-            with st.expander("🔑 API Key 변경"):
-                st.text_input(
-                    "새 API 키를 입력하세요.",
-                    type="password",
-                    key="new_api_key",
-                    value=st.session_state.api_key,   # ← 현재 저장된 키를 기본값으로 표시
-                    help="입력 후 Enter 를 누르세요.",
-                    on_change=_update_key,
-                )
-        else:
-            def _save_first_key():
-                st.session_state.api_key = st.session_state.first_api_key or ""
-
-            st.sidebar.text_input(
-                "API 키를 입력하세요.",
-                type="password",
-                key="first_api_key",
-                help="세션 동안 보존됩니다.",
-                on_change=_save_first_key,
-            )
-
+        # 입력값이 바뀐 경우 자동으로 st.session_state.api_key 가 업데이트됨
+ 
         # API 키 삭제(로그아웃) 버튼
         if st.session_state.api_key:
             def _clear_key():
