@@ -150,11 +150,18 @@ def render_progress_steps(progress_steps: List[Any], placeholder=None):
     container = placeholder.container() if placeholder else st
     for step in progress_steps:
         if isinstance(step, dict) and step.get("type") == "result_dropdown":
-            with container.expander(f"📄 단계 {step['step']} 결과 - {step['tool_name']} ({step['tool']})"):
-                st.write(f"**사용 도구**: {step['tool']}")
-                st.write(f"**도구 설명**: {step['tool_name']}")
-                st.write("**결과**:")
-                st.text(step['result'])
+            tool_args_str = step.get('arguments', '{}')
+            tool_args_dict = json.loads(tool_args_str)
+            tool_call_str = f"{step['tool']}({json.dumps(tool_args_dict)})"
+
+            with container.expander(f"📄 단계 {step['step']} 결과 - {step['tool_name']}"):
+                st.markdown(f"**호출**: `{tool_call_str}`")
+                st.markdown("**결과**:")
+                
+                result_text = step['result']
+                if len(result_text) > 1000:
+                    result_text = result_text[:1000] + "\n\n...(중략)"
+                st.text(result_text)
         elif "🔍 **단계" in step:
             container.info(step)
         elif "✅ **단계" in step:
@@ -186,7 +193,6 @@ def research_assistant_streaming(
 
     step_count = 0
     while True: 
-        step_count += 1
         resp = safe_create_responses(
             client,
             model=model_name,
@@ -219,6 +225,7 @@ def research_assistant_streaming(
             })
             continue # 다음 루프를 돌며 AI가 도구를 사용하도록 강제
 
+        step_count += 1
         call = response_message
         tool_name = call.name
         tool_descriptions = {
@@ -235,7 +242,14 @@ def research_assistant_streaming(
         history.extend([call, {"type": "function_call_output", "call_id": call.call_id, "output": result}])
         
         progress_steps.append(f"✅ **단계 {step_count} 완료**: {tool_ui_name}")
-        progress_steps.append({"type": "result_dropdown", "step": step_count, "tool": tool_name, "tool_name": tool_ui_name, "result": result})
+        progress_steps.append({
+            "type": "result_dropdown", 
+            "step": step_count, 
+            "tool": tool_name, 
+            "tool_name": tool_ui_name, 
+            "result": result,
+            "arguments": call.arguments,
+        })
         render_progress_steps(progress_steps, progress_placeholder)
 
         if tool_name == "save_to_file":
