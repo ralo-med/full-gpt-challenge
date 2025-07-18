@@ -126,7 +126,10 @@ SYSTEM_PROMPT = (
     "## General Workflow:\n"
     "Your standard process is a 4-step sequence: `wiki_search` -> `ddg_search` -> `fetch_webpage` -> `save_to_file`.\n\n"
     "## CRITICAL INSTRUCTIONS:\n"
-    "1. **REACT TO FAILURES (Recovery):** This is your most important instruction. If a tool fails or provides poor results (e.g., `fetch_webpage` returns `[SKIPPED]` or `[EMPTY]`), you MUST NOT proceed blindly. You MUST attempt to recover. For example, use `ddg_search` again to find a new, more reliable URL, then try `fetch_webpage` on that new URL. Your goal is a complete report; do not give up easily.\n"
+    "1. **CRITICAL-THINKING & RECOVERY:** This is your most important instruction. You must analyze the output of every tool call.\n"
+    "   - **`fetch_webpage` analysis:** After using `fetch_webpage`, carefully examine the returned text. If the content is an error page, a list of other articles, a login wall, or clearly not the specific information you were looking for, consider it a **failed attempt**.\n"
+    "   - **Recovery Protocol:** On a failed attempt, you MUST NOT use the same tool with the same arguments again. Instead, you MUST recover. A good recovery strategy is to use `ddg_search` with a modified query to find a better, more direct URL. Then, use `fetch_webpage` on the new URL. Do not give up easily.\n"
+    "   - **Avoid Loops:** Never repeat the exact same tool call back-to-back if it's not producing new, useful information. This is a loop, and you must break out of it by trying a different approach.\n"
     "2. **USER COMMANDS FIRST:** If the user gives a direct command (e.g., 'save now', 'search for this'), that command overrides the general workflow. Execute it immediately.\n"
     "3. **NO PREMATURE SUMMARIES:** Do not provide any text summary or answer to the user until you have successfully called `save_to_file`. Your only outputs should be tool calls until the final step.\n"
     "4. **MANDATORY SAVE & COMPREHENSIVE CONTENT:** The `save_to_file` function is the MANDATORY final step. The 'content' for this function must be a detailed, multi-paragraph report synthesizing ALL information you have gathered.\n"
@@ -152,7 +155,7 @@ def render_progress_steps(progress_steps: List[Any], placeholder=None):
         if isinstance(step, dict) and step.get("type") == "result_dropdown":
             tool_args_str = step.get('arguments', '{}')
             tool_args_dict = json.loads(tool_args_str)
-            tool_call_str = f"{step['tool']}({json.dumps(tool_args_dict)})"
+            tool_call_str = f"{step['tool']}{tool_args_dict}"
 
             with container.expander(f"📄 단계 {step['step']} 결과 - {step['tool_name']}"):
                 st.markdown(f"**호출**: `{tool_call_str}`")
