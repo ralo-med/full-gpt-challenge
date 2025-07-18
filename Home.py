@@ -13,7 +13,7 @@ st.title("Full-Stack GPT-4-Turbo App")
 
 with st.sidebar:
     api_key, model_name, temperature = setup_sidebar()
-    if api_key:
+    if api_key and api_key.strip():  # 빈 문자열이 아닌지 확인
         save_settings_to_session(api_key, model_name, temperature)
         os.environ["OPENAI_API_KEY"] = api_key
 

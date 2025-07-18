@@ -37,7 +37,7 @@ class ChatCallbackHandler(BaseCallbackHandler):
 
 with st.sidebar:
     api_key, model_name, temperature = setup_sidebar()
-    if api_key:
+    if api_key and api_key.strip():  # 빈 문자열이 아닌지 확인
         save_settings_to_session(api_key, model_name, temperature)
         os.environ["OPENAI_API_KEY"] = api_key
     
@@ -59,7 +59,7 @@ with st.sidebar:
         st.success("대화 기록이 초기화되었습니다!")
 
 
-if not api_key:
+if not (api_key and api_key.strip()):
     st.info("Please enter your OpenAI API key to proceed.")
     st.stop()
 
