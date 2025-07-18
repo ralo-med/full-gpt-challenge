@@ -41,6 +41,7 @@ def setup_sidebar():
                 "OpenAI API Key (저장됨)",
                 value=st.session_state.api_key,
                 key="api_key_display",
+                type="password",
                 disabled=True,
             )
             # 수정하고 싶을 때만 클릭해서 새 키 입력
