@@ -4,6 +4,7 @@ from typing import Dict, List, Any, Tuple
 
 import streamlit as st
 from openai import OpenAI, InternalServerError
+import requests
 from requests.exceptions import RequestException
 
 from langchain_community.utilities.duckduckgo_search import DuckDuckGoSearchAPIWrapper
@@ -36,20 +37,39 @@ def ddg_search(inputs: Dict[str, Any]) -> str:
 
 def fetch_webpage(inputs: Dict[str, Any]) -> str:
     url = inputs["url"]
+    headers = {"User-Agent": os.environ["USER_AGENT"]}
+    
     try:
-        loader = WebBaseLoader(
-            url,
-            requests_kwargs={
-                "timeout": 15,
-                "headers": {"User-Agent": os.environ["USER_AGENT"]},
-            },
-        )
+        session = requests.Session()
+        session.headers.update(headers)
+        
+        response = session.get(url, timeout=15)
+        response.raise_for_status()
+
+        content_type = response.headers.get("Content-Type", "")
+        if not (
+            "text/html" in content_type or 
+            "application/xhtml+xml" in content_type or
+            "text/plain" in content_type
+        ):
+            return f"[SKIPPED] URL is not a standard webpage (Content-Type: {content_type})."
+
+        loader = WebBaseLoader([url], requests_session=session)
         docs = loader.load()
+
+    except requests.exceptions.HTTPError as e:
+        return f"[FAILED] {url} (HTTP {e.response.status_code}: {e.response.reason})"
     except RequestException as e:
-        return f"[SKIPPED] {url} ({e.__class__.__name__}: {e})"
+        return f"[SKIPPED] {url} (Network error: {e.__class__.__name__})"
+
     content = "\n\n".join(doc.page_content for doc in docs)
     cleaned = "\n".join(line.strip() for line in content.splitlines() if line.strip())
-    return cleaned if cleaned else f"[EMPTY] {url}"
+
+    if not cleaned or "page not found" in cleaned.lower() or "404 not found" in cleaned.lower():
+        return f"[FAILED] Content is empty or indicates a 'Page Not Found' error at {url}"
+        
+    return cleaned
+
 
 def save_to_file(inputs: Dict[str, Any]) -> str:
     try:
