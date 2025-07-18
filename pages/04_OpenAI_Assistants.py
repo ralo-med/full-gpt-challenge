@@ -300,7 +300,7 @@ with st.sidebar:
                 file_name="result.txt",
                 mime="text/plain"
             )
-            if st.button("🗑️ 파일 삭제"):
+            if st.button("🗑️ 파일 삭제", disabled=st.session_state.get("processing", False)):
                 os.remove("result.txt")
                 st.success("파일이 삭제되었습니다!")
                 st.rerun()
@@ -331,44 +331,57 @@ st.session_state.messages = [
 ]
 
 
-if "progress_steps" in st.session_state and st.session_state.progress_steps:
-    render_progress_steps(st.session_state.progress_steps)
-
-
 for m in st.session_state.messages:
     content = m.get("content", "")
     if content and content.strip():
         with st.chat_message(m["role"]):
+            if m["role"] == "assistant" and "progress_steps" in m:
+                render_progress_steps(m["progress_steps"])
             st.markdown(content)
 
-if prompt := st.chat_input("웹에서 무엇을 찾아볼까요?"):
+
+if "processing" not in st.session_state:
+    st.session_state.processing = False
+
+if prompt := st.chat_input("웹에서 무엇을 찾아볼까요?", disabled=st.session_state.processing):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    st.session_state.processing = True
+    st.rerun()
+
+if st.session_state.processing and len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] == "user":
+    user_prompt = st.session_state.messages[-1]["content"]
     with st.chat_message("assistant"):
         if client is None:
             st.error("❌ OpenAI API 키가 필요합니다. 사이드바에서 API 키를 입력해주세요.")
+            st.session_state.processing = False
+            st.rerun()
         else:
             progress_placeholder = st.empty()
             try:
                 st.session_state.history, answer = research_assistant_streaming(
-                    client, prompt, st.session_state.history, progress_placeholder, model_name
+                    client, user_prompt, st.session_state.history, progress_placeholder, model_name
                 )
-                st.write("🎯 **최종 답변:**")
-                message_placeholder = st.empty()
-                full_response = ""
-                for chunk in answer.split():
-                    full_response += chunk + " "
-                    message_placeholder.markdown(full_response)
-                    time.sleep(0.05)
-                st.session_state.messages.append({"role": "assistant", "content": answer})
+                
+                final_message = {
+                    "role": "assistant", 
+                    "content": answer, 
+                    "progress_steps": st.session_state.get("progress_steps", [])
+                }
+                st.session_state.messages.append(final_message)
+                
+                st.session_state.processing = False
+                st.session_state.progress_steps = []
                 st.rerun()
+
             except Exception as e:
                 progress_placeholder.empty()
                 st.error(f"❌ 연구 중 오류가 발생했습니다: {str(e)}")
                 st.info("💡 API 키와 모델 설정을 확인해주세요.")
+                st.session_state.processing = False
+                st.rerun()
 
-if st.sidebar.button("🗑️ 대화 초기화"):
+
+if st.sidebar.button("🗑️ 대화 초기화", disabled=st.session_state.get("processing", False)):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.session_state.history = [{"role": "system", "content": SYSTEM_PROMPT}]
