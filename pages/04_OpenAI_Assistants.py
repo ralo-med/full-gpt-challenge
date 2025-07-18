@@ -37,30 +37,22 @@ def ddg_search(inputs: Dict[str, Any]) -> str:
 
 def fetch_webpage(inputs: Dict[str, Any]) -> str:
     url = inputs["url"]
-    headers = {"User-Agent": os.environ["USER_AGENT"]}
-    
     try:
-        session = requests.Session()
-        session.headers.update(headers)
-        
-        response = session.get(url, timeout=15)
-        response.raise_for_status()
-
-        content_type = response.headers.get("Content-Type", "")
-        if not (
-            "text/html" in content_type or 
-            "application/xhtml+xml" in content_type or
-            "text/plain" in content_type
-        ):
-            return f"[SKIPPED] URL is not a standard webpage (Content-Type: {content_type})."
-
-        loader = WebBaseLoader([url], requests_session=session)
+        loader = WebBaseLoader(
+            [url],  # Expects a list of URLs
+            requests_kwargs={
+                "timeout": 15,
+                "headers": {"User-Agent": os.environ["USER_AGENT"]},
+            },
+        )
         docs = loader.load()
-
     except requests.exceptions.HTTPError as e:
         return f"[FAILED] {url} (HTTP {e.response.status_code}: {e.response.reason})"
     except RequestException as e:
         return f"[SKIPPED] {url} (Network error: {e.__class__.__name__})"
+
+    if not docs:
+        return f"[FAILED] No content loaded from {url}"
 
     content = "\n\n".join(doc.page_content for doc in docs)
     cleaned = "\n".join(line.strip() for line in content.splitlines() if line.strip())
