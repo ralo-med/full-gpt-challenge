@@ -33,13 +33,31 @@ def setup_sidebar():
     else:
         if dev_mode:
             st.sidebar.warning("개발 모드이지만 .env에 API 키가 없습니다.")
-        st.sidebar.text_input(
-            "API 키를 입력하세요.",
-            type="password",
-            key="api_key",
-            value=st.session_state.api_key,
-            help="API 키는 세션이 지속되는 동안 저장됩니다.",
-        )
+
+        if st.session_state.api_key:
+            # 이미 입력된 키가 있을 때는 숨기고 표시만.
+            with st.expander("🔑 API Key 설정 (클릭하여 변경)"):
+                st.text_input(
+                    "API 키를 업데이트하세요.",
+                    type="password",
+                    key="api_key",
+                    value=st.session_state.api_key,
+                    help="변경하려면 새 키를 입력하세요.",
+                )
+        else:
+            # 처음 입력 시
+            st.sidebar.text_input(
+                "API 키를 입력하세요.",
+                type="password",
+                key="api_key",
+                help="세션 동안 보존됩니다.",
+            )
+
+        # API 키 삭제(로그아웃) 버튼
+        if st.session_state.api_key:
+            if st.sidebar.button("❌ API 키 삭제", key="clear_api_key"):
+                st.session_state.api_key = ""
+                st.experimental_rerun()
 
     st.sidebar.header("모델 설정")
     st.sidebar.selectbox(
