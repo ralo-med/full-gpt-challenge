@@ -8,6 +8,8 @@ langchain-core>=0.1.0
 unstructured>=0.10.0
 faiss-cpu>=1.7.0
 tiktoken>=0.5.0
+# 검색용 패키지
+duckduckgo-search>=5.3.0
 pydantic>=2.0.0,<3.0.0
 wikipedia>=1.4.0
 python-docx>=0.8.11

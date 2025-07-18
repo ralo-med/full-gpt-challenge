@@ -4,21 +4,18 @@ from dotenv import load_dotenv
 
 
 def setup_sidebar():
-    """
-    사이드바를 설정하고 st.session_state를 사용해 상태를 관리합니다.
-    개발 모드에서는 .env 파일의 API 키를 우선적으로 사용합니다.
-    """
+
     load_dotenv()
 
-    # ---- 위젯 렌더링 전 세션 상태 초기화 (권장 패턴) ----
+ 
     if "api_key" not in st.session_state:
         st.session_state.api_key = ""
     if "model_name" not in st.session_state:
         st.session_state.model_name = "gpt-4.1-nano"
     if "temperature" not in st.session_state:
-        st.session_state.temperature = 0.1
+   
+        pass  # 기본값은 아래 슬라이더에서 처리
 
-    # 개발 모드일 경우 .env에서 API 키를 우선적으로 로드
     dev_mode = os.getenv("DEV_MODE", "False").lower() == "true"
     if dev_mode and os.getenv("OPENAI_API_KEY"):
         st.session_state.api_key = os.getenv("OPENAI_API_KEY")
@@ -40,6 +37,7 @@ def setup_sidebar():
             "API 키를 입력하세요.",
             type="password",
             key="api_key",
+            value=st.session_state.api_key,
             help="API 키는 세션이 지속되는 동안 저장됩니다.",
         )
 
@@ -49,13 +47,15 @@ def setup_sidebar():
         ("gpt-4.1-nano", "gpt-4o-mini", "gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"),
         key="model_name",
     )
+    # 슬라이더를 생성하고 반환값을 session_state.temperature 로 자동 반영
+    initial_temp = st.session_state.get("temperature", 0.1)
     st.sidebar.slider(
         "Temperature",
         min_value=0.0,
         max_value=2.0,
         step=0.1,
+        value=initial_temp,
         key="temperature",
-        value=st.session_state.temperature,  # 세션 상태의 값을 기본값으로 사용
     )
 
     # st.session_state에서 직접 값을 반환합니다.
