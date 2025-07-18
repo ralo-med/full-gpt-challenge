@@ -1,25 +1,31 @@
 import streamlit as st
-from langchain.document_loaders import SitemapLoader
-from langchain.document_transformers import Html2TextTransformer
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
-from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
-from langchain.callbacks import StreamingStdOutCallbackHandler
-from langchain.schema import BaseOutputParser, output_parser
+from langchain.document_loaders import SitemapLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.schema.runnable import RunnablePassthrough
-from langchain.schema.runnable import RunnableLambda
-import re
+from langchain.vectorstores.faiss import FAISS
+from langchain.embeddings import OpenAIEmbeddings
+from langchain.schema.runnable import RunnablePassthrough, RunnableLambda
+from langchain_openai import ChatOpenAI
+from langchain.callbacks.base import BaseCallbackHandler
+from langchain.document_transformers import Html2TextTransformer
+from utils import setup_sidebar, save_settings_to_session
 import os
-from utils import setup_page_with_sidebar, create_llm_safe
+import re
 
-# 페이지 설정
+
+class ChatCallbackHandler(BaseCallbackHandler):
+    def __init__(self, container):
+        self.container = container
+        self.message = ""
+
+    def on_llm_new_token(self, token: str, **kwargs) -> None:
+        self.message += token
+        self.container.markdown(self.message)
+
+
 st.set_page_config(
     page_title="SiteGPT",
-    page_icon="🌐",
-    layout="wide",
+    page_icon="🤖",
 )
 
 answers_prompt = ChatPromptTemplate.from_template(
@@ -70,12 +76,13 @@ choose_prompt = ChatPromptTemplate.from_messages(
 
 html2text_transformer = Html2TextTransformer()
 
+
 def parse_page(soup):
     header = soup.find("header")
     footer = soup.find("footer")
     if header:
         header.decompose()
-    elif footer:
+    if footer:
         footer.decompose()
     return str(soup.get_text()).replace("\n", " ").replace("\xa0", " ")
 
@@ -84,50 +91,47 @@ def extract_score(text):
     match = re.search(r"Score:\s*([0-5](?:\.\d+)?)", text)
     return float(match.group(1)) if match else 0.0
 
+
 def get_answer(inputs):
-    if llm is None:
-        st.error("API 키를 설정해주세요.")
-        return {"question": inputs["question"], "answer": []}
-    
+    llm = inputs["llm"]
     question = inputs["question"]
     docs = inputs["docs"]
 
     answer_chain = answers_prompt | llm
     answers = []
-    
 
     for doc in docs:
         try:
-       
             content = doc.page_content
             result = answer_chain.invoke({"context": content, "question": question})
             score = extract_score(result.content)
-            answers.append({
-                "answer": result.content,
-                "source": doc.metadata.get("source", "Unknown"),
-                "date": doc.metadata.get("lastmod", "Unknown"),
-                "score": score
-            })
+            answers.append(
+                {
+                    "answer": result.content,
+                    "source": doc.metadata.get("source", "Unknown"),
+                    "date": doc.metadata.get("lastmod", "Unknown"),
+                    "score": score,
+                }
+            )
         except Exception as e:
             st.warning(f"문서 처리 중 오류: {str(e)}")
             continue
-    
-    return {"question": question, "answer": answers}
+
+    return {"question": question, "answer": answers, "llm": llm}
+
 
 def choose_answer(inputs):
-    if llm is None:
-        st.error("API 키를 설정해주세요.")
-        return type('obj', (object,), {'content': 'API 키를 설정해주세요.'})
-    
-    question = inputs['question']
-    answers = inputs['answer']
-    
+    llm = inputs["llm"]
+    question = inputs["question"]
+    answers = inputs["answer"]
+
     choose_chain = choose_prompt | llm
-    condensed_answer = '\n\n'.join(
+    condensed_answer = "\n\n".join(
         f"{answer['answer']}\nSource: {answer['source']}\nDate: {answer['date']}\nScore: {answer['score']}\n\n"
         for answer in answers
     )
-    return choose_chain.invoke({'answers': condensed_answer, 'question': question})
+    return choose_chain.invoke({"answers": condensed_answer, "question": question})
+
 
 @st.cache_resource(show_spinner="Loading sitemap...", ttl=3600)
 def load_sitemap_docs(url):
@@ -135,35 +139,35 @@ def load_sitemap_docs(url):
     import urllib3
     import requests
     from requests.adapters import HTTPAdapter
-    from urllib3.util.retry import Retry
-    
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-    
-    # SSL 검증을 완전히 비활성화하는 세션 생성
-    session = requests.Session()
-    session.verify = False
-    
-    # 어댑터 설정
-    adapter = HTTPAdapter()
-    session.mount("http://", adapter)
-    session.mount("https://", adapter)
-    text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(chunk_size=500, chunk_overlap=100)
 
-    
-    loader = SitemapLoader(
-        url,
-        filter_urls=[
-          r"^(.*\/ai-gateway\/).*",
-          r"^(.*\/vectorize\/).*", 
-          r"^(.*\/workers-ai\/).*"
-        ],
-        parsing_function=parse_page,
-        session=session
-    )
-    loader.requests_per_second = 10  # 속도 조절
-    docs = loader.load()
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    with requests.Session() as session:
+        session.verify = False
+        adapter = HTTPAdapter()
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        
+        text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+            chunk_size=500, chunk_overlap=100
+        )
+
+        loader = SitemapLoader(
+            url,
+            filter_urls=[
+                r"^(.*\/ai-gateway\/).*",
+                r"^(.*\/vectorize\/).*",
+                r"^(.*\/workers-ai\/).*",
+            ],
+            parsing_function=parse_page,
+            session=session,
+        )
+        loader.requests_per_second = 10  # 속도 조절
+        docs = loader.load()
+
     split_docs = text_splitter.split_documents(docs)
     return split_docs
+
 
 def create_retriever(docs):
     """분할된 문서로부터 벡터 스토어와 리트리버를 생성합니다. API 키가 필요합니다."""
@@ -178,51 +182,49 @@ def create_retriever(docs):
             st.error(f"❌ 임베딩 생성 중 오류가 발생했습니다: {str(e)}")
         return None
 
+
 st.title("SiteGPT")
 st.write("Cloudflare AI 제품 문서 질의응답")
 
 
-st.markdown("""
+st.markdown(
+    """
 이 시스템은 Cloudflare의 AI Gateway, Vectorize, Workers AI 제품에 대한 질문을 답변할 수 있습니다:
 - **AI Gateway**: AI 모델 API 통합 및 관리
 - **Vectorize**: 벡터 데이터베이스 및 임베딩 서비스  
 - **Workers AI**: 서버리스 AI 추론 서비스
 
 Cloudflare 공식 문서가 자동으로 로드됩니다.
-""")
+"""
+)
 
 with st.sidebar:
-    # 공통 사이드바 설정
-    from utils import setup_sidebar, save_settings_to_session, create_llm_safe
     api_key, model_name, temperature = setup_sidebar()
-    
-    # API 키가 있을 때만 설정을 세션 상태에 저장
     if api_key:
         save_settings_to_session(api_key, model_name, temperature)
-    
-    # 안전한 LLM 생성
-    llm = create_llm_safe(model_name, temperature)
-    
-    st.divider()
-    
-    st.write("Cloudflare 공식 문서")
-    url = "https://developers.cloudflare.com/sitemap-0.xml"
-    st.info(f"📄 사이트맵: {url}")
+        os.environ["OPENAI_API_KEY"] = api_key
+
+if not api_key:
+    st.info("Please enter your OpenAI API key to proceed.")
+    st.stop()
+
+llm = ChatOpenAI(model_name=model_name, temperature=temperature)
+url = "https://developers.cloudflare.com/sitemap.xml"
 
 if url:
     if url.endswith(".xml"):
         if st.button("🔄 다시 로드", key="reload_button"):
             st.cache_resource.clear()
             st.success("캐시가 지워졌습니다. 페이지를 새로고침하세요.")
-        
+
         try:
             # 1단계: 사이트맵 로딩 (API 키 불필요)
             docs = load_sitemap_docs(url)
             st.success("✅ 사이트맵 로딩 완료!")
-            
+
             # 2단계: 임베딩 생성 (API 키 필요)
             retriever = create_retriever(docs)
-            
+
             if retriever:
                 query = st.text_input("질문을 입력하세요:", key="query")
                 if query:
@@ -230,31 +232,32 @@ if url:
                         st.error("API 키를 설정해주세요.")
                     else:
                         # 문서 검색 - 모든 관련 문서 검색
-                        docs = retriever.invoke(query)
-                        
+                        retrieved_docs = retriever.invoke(query)
+
                         chain = (
                             {
-                                "docs": lambda x: docs,
+                                "docs": lambda x: retrieved_docs,
                                 "question": RunnablePassthrough(),
+                                "llm": lambda x: llm,
                             }
                             | RunnableLambda(get_answer)
                             | RunnableLambda(choose_answer)
                         )
-                        result = chain.invoke({"question": query})
+                        result = chain.invoke(query)
                         st.write("**답변:**")
                         st.write(result.content)
             else:
                 st.warning("⚠️ 임베딩이 생성되지 않아 질의응답을 사용할 수 없습니다.")
                 st.info("💡 사이드바에서 OpenAI API 키를 입력한 후 페이지를 새로고침하세요.")
-                
+
         except Exception as e:
             st.error(f"❌ 사이트맵 로딩 중 오류가 발생했습니다: {str(e)}")
             st.info("💡 팁: 네트워크 연결을 확인하거나 잠시 후 다시 시도해보세요.")
     else:
-        with st.sidebar:
-            st.error("Please enter a Sitemap URL.")
+        st.error("Please enter a Sitemap URL.")
 else:
-    st.markdown("""# Cloudflare AI 제품 문서
+    st.markdown(
+        """# Cloudflare AI 제품 문서
                  
 이 시스템은 Cloudflare의 AI Gateway, Vectorize, Workers AI 제품에 대한 질문을 답변할 수 있습니다:
 - **AI Gateway**: AI 모델 API 통합 및 관리
@@ -263,7 +266,8 @@ else:
 
 Cloudflare 공식 문서가 로드되어 있습니다.
                  
-""")
+"""
+    )
 
 
 

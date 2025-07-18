@@ -3,294 +3,250 @@ from langchain.retrievers import WikipediaRetriever
 from langchain.text_splitter import CharacterTextSplitter
 import os
 from langchain.document_loaders import UnstructuredFileLoader
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.callbacks import StreamingStdOutCallbackHandler
-from langchain.schema import BaseOutputParser, output_parser
+from langchain.schema.output_parser import StrOutputParser
 import json
-from utils import setup_page_with_sidebar, create_llm_safe
+from utils import setup_sidebar, save_settings_to_session
 
-# 페이지 설정과 사이드바 설정
-api_key, model_name, temperature = setup_page_with_sidebar("QuizGPT", "🤔", "wide")
 
-# Function calling을 위한 스키마 정의
-quiz_schema = {
-    "type": "object",
-    "properties": {
-        "questions": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "question": {"type": "string"},
-                    "answers": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "answer": {"type": "string"},
-                                "correct": {"type": "boolean"}
-                            },
-                            "required": ["answer", "correct"]
-                        }
-                    }
-                },
-                "required": ["question", "answers"]
-            }
-        }
-    },
-    "required": ["questions"]
-}
+# -------------------- 1. 모든 함수 및 클래스 정의 --------------------
 
-class JsonOutputParser(BaseOutputParser):
+class JsonOutputParser(StrOutputParser):
     def parse(self, text: str):
-        text=text.replace("```json","").replace("```","")
+        text = text.replace("```json", "").replace("```", "")
         return json.loads(text)
-    
-output_parser = JsonOutputParser()
+
 
 def format_docs(docs):
     return "\n\n".join([doc.page_content for doc in docs])
 
-# 안전한 LLM 생성
-llm = create_llm_safe(model_name, temperature, [StreamingStdOutCallbackHandler()])
 
-# Function calling을 활용한 퀴즈 생성 프롬프트
-quiz_generation_prompt = ChatPromptTemplate.from_messages([
-    ("system", """
-    You are a helpful assistant that is role playing as a teacher.
-    
-    Based ONLY on the following context, create 10 questions to test the user's knowledge about the text.
-    
-    Each question should have exactly 4 answers, with three incorrect answers and one correct answer.
-    
-    Make sure the questions are diverse and test different aspects of the content.
-    Questions should be clear, concise, and appropriate for the difficulty level of the content.
-    
-    Context: {context}
-    """),
-    ("user", "Generate a quiz based on the provided context.")
-])
-
-# Function calling을 활용한 퀴즈 생성 함수 (난이도 추가)
-def generate_quiz_with_function_calling(docs, difficulty="easy"):
-    """Function calling을 사용하여 퀴즈를 생성합니다."""
-    if llm is None:
-        st.error("API 키를 설정해주세요.")
-        return {"questions": []}
-    
-    try:
-        # 난이도별 프롬프트 설정
-        difficulty_prompts = {
-            "easy": "쉬운 난이도로 기본적인 사실과 개념을 묻는 질문을 만들어주세요. 명확하고 직관적인 답변을 포함해주세요.",
-            "hard": "어려운 난이도로 심화된 분석과 추론이 필요한 질문을 만들어주세요. 세부사항과 복잡한 개념을 다루는 질문을 포함해주세요."
-        }
-        
-        difficulty_instruction = difficulty_prompts.get(difficulty, difficulty_prompts["easy"])
-        
-        # 난이도별 퀴즈 생성 프롬프트
-        quiz_generation_prompt = ChatPromptTemplate.from_messages([
-            ("system", f"""
-            You are a helpful assistant that is role playing as a teacher.
-            
-            Based ONLY on the following context, create 10 questions to test the user's knowledge about the text.
-            
-            Each question should have exactly 4 answers, with three incorrect answers and one correct answer.
-            
-            IMPORTANT: Randomize the position of correct answers. Do not always put the correct answer in the first or second position. 
-            Distribute correct answers evenly across all 4 positions (1st, 2nd, 3rd, 4th) throughout the quiz.
-            
-            {difficulty_instruction}
-            
-            Make sure the questions are diverse and test different aspects of the content.
-            Questions should be clear, concise, and appropriate for the {difficulty} difficulty level.
-            
-            Context: {{context}}
-            """),
-            ("user", f"Generate a {difficulty} difficulty quiz based on the provided context.")
-        ])
-        
-        # LLM에 function calling 설정
-        llm_with_functions = llm.bind(functions=[{
-            "name": "generate_quiz",
-            "description": f"Generate a {difficulty} difficulty quiz with questions and answers based on the provided context",
-            "parameters": quiz_schema
-        }])
-        
-        # 체인 생성
-        chain = {"context": format_docs} | quiz_generation_prompt | llm_with_functions
-        
-        # 퀴즈 생성
-        result = chain.invoke(docs)
-        
-        # Function calling 결과 파싱
-        if hasattr(result, 'additional_kwargs') and 'function_call' in result.additional_kwargs:
-            function_call = result.additional_kwargs['function_call']
-            if function_call and function_call.get('name') == 'generate_quiz':
-                arguments = json.loads(function_call.get('arguments', '{}'))
-                return arguments
-        
-        # Fallback: 일반 텍스트 응답을 JSON으로 파싱 시도
-        try:
-            return json.loads(result.content)
-        except:
-            st.error("퀴즈 생성 중 오류가 발생했습니다.")
-            return {"questions": []}
-            
-    except Exception as e:
-        st.error(f"퀴즈 생성 중 오류가 발생했습니다: {str(e)}")
-        return {"questions": []}
-
-st.title("QuizGPT")
-st.write("This is a quiz application built with Streamlit and OpenAI.")
-
-@st.cache_data(show_spinner=False)  # 스피너 제거
+@st.cache_data(show_spinner=False)
 def split_file(file):
-    os.makedirs("./.cache/quiz_files", exist_ok=True)
-    os.makedirs("./.cache/quiz_embeddings", exist_ok=True)
-    
     file_content = file.read()
-    file_path = f"./.cache/quiz_files/{file.name}"
-    
+    cache_dir = "./.cache/quiz_files"
+    os.makedirs(cache_dir, exist_ok=True)
+    file_path = f"{cache_dir}/{file.name}"
     with open(file_path, "wb") as f:
         f.write(file_content)
-    
     splitter = CharacterTextSplitter.from_tiktoken_encoder(
-        separator="\n",
-        chunk_size=600,
-        chunk_overlap=100,
+        separator="\n", chunk_size=600, chunk_overlap=100
     )
     loader = UnstructuredFileLoader(file_path, mode="elements")
     docs = loader.load()
     docs = splitter.split_documents(docs)
     return docs
 
-@st.cache_data(show_spinner=False)  # 스피너 제거
-def run_quiz(_docs, topic, difficulty="easy"):
+
+@st.cache_data(show_spinner=False)
+def run_quiz(llm, _docs, topic, difficulty="easy"):
     """Function calling을 사용하여 퀴즈를 생성합니다."""
-    return generate_quiz_with_function_calling(_docs, difficulty)
+    
+    quiz_schema = {
+        "type": "object",
+        "properties": {
+            "questions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "question": {"type": "string"},
+                        "answers": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "answer": {"type": "string"},
+                                    "correct": {"type": "boolean"},
+                                },
+                                "required": ["answer", "correct"],
+                            },
+                        },
+                    },
+                    "required": ["question", "answers"],
+                },
+            }
+        },
+        "required": ["questions"],
+    }
+    
+    difficulty_prompts = {
+        "easy": "쉬운 난이도로 기본적인 사실과 개념을 묻는 질문을 만들어주세요. 명확하고 직관적인 답변을 포함해주세요.",
+        "hard": "어려운 난이도로 심화된 분석과 추론이 필요한 질문을 만들어주세요. 세부사항과 복잡한 개념을 다루는 질문을 포함해주세요.",
+    }
+    difficulty_instruction = difficulty_prompts.get(difficulty, difficulty_prompts["easy"])
+    
+    quiz_generation_prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                f"""
+        You are a helpful assistant that is role playing as a teacher.
+        Based ONLY on the following context, create 10 questions to test the user's knowledge about the text.
+        Each question should have exactly 4 answers, with three incorrect answers and one correct answer.
+        IMPORTANT: Randomize the position of correct answers. Do not always put the correct answer in the first or second position. 
+        Distribute correct answers evenly across all 4 positions (1st, 2nd, 3rd, 4th) throughout the quiz.
+        {difficulty_instruction}
+        Make sure the questions are diverse and test different aspects of the content.
+        Questions should be clear, concise, and appropriate for the {difficulty} difficulty level.
+        Context: {{context}}
+        """,
+            ),
+            ("user", f"Generate a {difficulty} difficulty quiz based on the provided context."),
+        ]
+    )
+    
+    output_parser = JsonOutputParser()
+
+    llm_with_functions = llm.bind(
+        functions=[
+            {
+                "name": "generate_quiz",
+                "description": f"Generate a {difficulty} difficulty quiz with questions and answers based on the provided context",
+                "parameters": quiz_schema,
+            }
+        ],
+        function_call={"name": "generate_quiz"},
+    )
+    
+    chain = {"context": format_docs} | quiz_generation_prompt | llm_with_functions
+    
+    try:
+        result = chain.invoke(docs)
+        if hasattr(result, "additional_kwargs") and "function_call" in result.additional_kwargs:
+            function_call = result.additional_kwargs["function_call"]
+            if function_call and function_call.get("name") == "generate_quiz":
+                arguments = json.loads(function_call.get("arguments", "{}"))
+                return arguments
+        try:
+            return json.loads(result.content)
+        except (json.JSONDecodeError, AttributeError):
+            st.error("퀴즈 생성 중 모델의 응답을 파싱하는 데 실패했습니다. 일반 텍스트로 반환된 내용일 수 있습니다.")
+            return {"questions": []}
+    except Exception as e:
+        st.error(f"퀴즈 생성 중 오류 발생: {e}")
+        return {"questions": []}
+
 
 def run_wikipedia_quiz(topic):
     retrieval = WikipediaRetriever(top_k_results=5, search_kwargs={"srsearch": topic})
     docs = retrieval.get_relevant_documents(topic)
     return docs
 
-# 사이드바 설정 (네비게이션 바로 아래)
+
+# -------------------- 2. 페이지 설정 및 사이드바 --------------------
+
+st.set_page_config(page_title="Quiz Generator", page_icon="❓")
+st.title("Quiz Generator")
+
 with st.sidebar:
-    # 공통 사이드바 설정
-    from utils import setup_sidebar, save_settings_to_session
     api_key, model_name, temperature = setup_sidebar()
-    
-    # API 키가 있을 때만 설정을 세션 상태에 저장
     if api_key:
         save_settings_to_session(api_key, model_name, temperature)
-    
-    st.divider()
-    
-    st.write("퀴즈 소스 선택")
-    docs = None
-    choice = st.selectbox("퀴즈를 생성할 소스를 선택하세요",("File","Wikipedia Article"))
+        os.environ["OPENAI_API_KEY"] = api_key
 
-    if choice == "File":
-        file = st.file_uploader("파일 업로드", type=["pdf","txt","docx"])
-        if file:
-            st.write("파일이 성공적으로 업로드되었습니다!")
+if not api_key:
+    st.info("Please enter your OpenAI API key to proceed.")
+    st.stop()
+
+llm = ChatOpenAI(model_name=model_name, temperature=temperature)
+
+st.write("This is a quiz application built with Streamlit and OpenAI.")
+st.divider()
+
+# -------------------- 3. 메인 UI 및 로직 --------------------
+
+st.write("### 퀴즈 소스 선택")
+
+docs = None
+topic_name = None
+choice = st.selectbox("퀴즈를 생성할 소스를 선택하세요", ("File", "Wikipedia Article"))
+st.write("")  # 드롭다운 아래에 패딩 추가
+
+if choice == "File":
+    file = st.file_uploader("파일 업로드", type=["pdf", "txt", "docx"])
+    if file:
+        with st.spinner("파일을 처리 중입니다..."):
             docs = split_file(file)
-
-    if choice == "Wikipedia Article":
-        topic = st.text_input("위키피디아 주제 입력")
-        if topic:
-            docs = run_wikipedia_quiz(topic)
-            if docs:
-                st.success("완료! 퀴즈 생성을 눌러주세요.")
-    
+        topic_name = file.name
+        st.success("파일이 성공적으로 처리되었습니다!")
+elif choice == "Wikipedia Article":
+    topic = st.text_input("위키피디아 주제 입력")
+    if topic:
+        with st.spinner("Wikipedia에서 문서를 검색 중입니다..."):
+            retrieved_docs = run_wikipedia_quiz(topic)
+        if retrieved_docs:
+            docs = retrieved_docs
+            topic_name = topic
+            st.success("완료! 아래에서 퀴즈를 생성하세요.")
+        else:
+            st.error("해당 주제에 대한 Wikipedia 문서를 찾을 수 없습니다. 다른 주제를 시도해주세요.")
 
 
 if not docs:
-     st.markdown("""Welcome to QuizGQP.           
+    st.markdown(
+        """Welcome to QuizGPT.           
 I will make a quiz from Wikipedia Article or Documents.              
 Get started by selecting a topic.
-                 
-""")
+"""
+    )
 else:
-    # 난이도 설정
+    st.divider()
     difficulty = st.radio(
         "난이도",
         ["easy", "hard"],
         format_func=lambda x: {"easy": "쉬움", "hard": "어려움"}[x],
         index=0,
-        horizontal=True
+        horizontal=True,
     )
-    
-    # 퀴즈 생성 버튼
+
     col1, col2 = st.columns([2, 1])
     with col1:
         if st.button("Generate Quiz", type="secondary"):
-            if llm is None:
-                st.error("API 키를 설정해주세요.")
-            else:
-                with st.spinner("퀴즈를 생성하고 있습니다..."):
-                    result = run_quiz(docs, topic if 'topic' in locals() and topic else file.name if 'file' in locals() else "unknown", difficulty)
-                    
-                    if result and "questions" in result:
-                        st.session_state.quiz_result = result
-                        st.success("퀴즈가 성공적으로 생성되었습니다!")
-                    else:
-                        st.error("퀴즈 생성에 실패했습니다. 다시 시도해주세요.")
-
+            with st.spinner("퀴즈를 생성하고 있습니다..."):
+                st.session_state.quiz_result = run_quiz(
+                    llm, docs, topic_name, difficulty
+                )
     with col2:
         if st.button("New Quiz", type="secondary"):
-            if llm is None:
-                st.error("API 키를 설정해주세요.")
-            else:
-                # 캐시 무효화
+            with st.spinner("새로운 퀴즈를 생성하고 있습니다..."):
                 run_quiz.clear()
-                # 기존 퀴즈 결과 삭제
-                if 'quiz_result' in st.session_state:
-                    del st.session_state.quiz_result
-                # 새로운 퀴즈 자동 생성
-                with st.spinner("새로운 퀴즈를 생성하고 있습니다..."):
-                    result = run_quiz(docs, topic if 'topic' in locals() and topic else file.name if 'file' in locals() else "unknown", difficulty)
-                    
-                    if result and "questions" in result:
-                        st.session_state.quiz_result = result
-                        st.success("새로운 퀴즈가 성공적으로 생성되었습니다!")
-                    else:
-                        st.error("퀴즈 생성에 실패했습니다. 다시 시도해주세요.")
-                st.rerun()
-    
-    # 퀴즈 표시 (생성된 경우에만)
-    if hasattr(st.session_state, 'quiz_result') and st.session_state.quiz_result:
+                st.session_state.quiz_result = run_quiz(
+                    llm, docs, topic_name, difficulty
+                )
+            st.rerun()
+
+    if "quiz_result" in st.session_state and st.session_state.quiz_result.get("questions"):
+        st.divider()
+        st.write("### 퀴즈")
         result = st.session_state.quiz_result
-        
         with st.form("quiz_form"):
             for i, question in enumerate(result["questions"]):
                 st.write(f"**질문 {i+1}:** {question['question']}")
                 value = st.radio(
-                    "",
+                    "정답을 선택하세요.",
                     [answer["answer"] for answer in question["answers"]],
                     key=f"question_{i}",
-                    index=None
+                    index=None,
+                    label_visibility="collapsed",
                 )
-                
-                # 각 질문 아래에 정답 체크 표시
-                if value is not None:
-                    correct_answer = next((ans["answer"] for ans in question["answers"] if ans["correct"]), None)
-                    if value == correct_answer:
-                        st.success("✅ 정답입니다!")
-                    else:
-                        st.error(f"❌ 틀렸습니다!")
-            
-            submit = st.form_submit_button("퀴즈 제출")
-            if submit:
-                # 최종 결과만 표시
-                correct_count = sum(1 for i, question in enumerate(result["questions"]) 
-                                 if st.session_state.get(f"question_{i}") == 
-                                 next((ans["answer"] for ans in question["answers"] if ans["correct"]), None))
+            if st.form_submit_button("퀴즈 제출"):
+                correct_count = 0
+                for i, q in enumerate(result["questions"]):
+                    user_answer = st.session_state.get(f"question_{i}")
+                    correct_answer = next(
+                        (a["answer"] for a in q["answers"] if a["correct"]), None
+                    )
+                    if user_answer == correct_answer:
+                        correct_count += 1
                 total_questions = len(result["questions"])
-                st.write(f"**최종 결과: {correct_count}/{total_questions} 정답**")
+                st.success(f"**최종 결과: {correct_count}/{total_questions} 정답**")
                 if correct_count == total_questions:
                     st.balloons()
+    elif "quiz_result" in st.session_state:
+        st.error("퀴즈 생성에 실패했습니다. 다시 시도해주세요.")
 
 
 

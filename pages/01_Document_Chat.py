@@ -8,51 +8,38 @@ from langchain.vectorstores.faiss import FAISS
 import streamlit as st
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema.runnable import RunnableLambda, RunnablePassthrough
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.callbacks.base import BaseCallbackHandler
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import MessagesPlaceholder
-from utils import setup_page_with_sidebar, create_llm_safe
+from utils import setup_sidebar, save_settings_to_session
 
-# 페이지 설정과 사이드바 설정
-api_key, model_name, temperature = setup_page_with_sidebar("DocumentGPT", "🔥", "wide")
+st.set_page_config(page_title="Document Chat", page_icon="📄")
+st.title("Document Chat")
 
 class ChatCallbackHandler(BaseCallbackHandler):
 
     def __init__(self):
         self.message = ""
-        self.message_box = None
+        self.message_box = st.empty()
 
     def on_llm_start(self, *args, **kwargs):
-        try:
-            self.message = ""
-            self.message_box = st.empty()
-        except Exception:
-            pass
+        self.message = ""
+        self.message_box = st.empty()
         
     def on_llm_end(self, *args, **kwargs):
-        try:
-            save_message(self.message, "ai")
-        except Exception:
-            pass
+        save_message(self.message, "ai")
 
     def on_llm_new_token(self, token: str, **kwargs):
-        try:
-            self.message += token
-            if self.message_box is not None:
-                self.message_box.markdown(self.message)
-        except Exception:
-            pass
+        self.message += token
+        if self.message_box is not None:
+            self.message_box.markdown(self.message)
 
-# 사이드바 설정 (네비게이션 바로 아래)
 with st.sidebar:
-    # 공통 사이드바 설정
-    from utils import setup_sidebar, save_settings_to_session
     api_key, model_name, temperature = setup_sidebar()
-    
-    # API 키가 있을 때만 설정을 세션 상태에 저장
     if api_key:
         save_settings_to_session(api_key, model_name, temperature)
+        os.environ["OPENAI_API_KEY"] = api_key
     
     st.divider()
     
@@ -66,49 +53,40 @@ with st.sidebar:
     
     st.write("대화 관리")
     if st.button("대화 기록 초기화"):
-        try:
-            if "memory" in st.session_state:
-                st.session_state.memory.clear()
-            st.session_state["messages"] = []
-            st.success("대화 기록이 초기화되었습니다!")
-        except Exception:
-            pass
-    
+        if "memory" in st.session_state:
+            st.session_state.memory.clear()
+        st.session_state["messages"] = []
+        st.success("대화 기록이 초기화되었습니다!")
+
+
+if not api_key:
+    st.info("Please enter your OpenAI API key to proceed.")
+    st.stop()
 
 
 # API 키가 있을 때만 LLM 초기화 및 메모리 설정
-llm = create_llm_safe(model_name, temperature, [ChatCallbackHandler()])
+llm = ChatOpenAI(
+    model_name=model_name, 
+    temperature=temperature, 
+    streaming=True,
+    callbacks=[ChatCallbackHandler()]
+)
 
 # 메모리를 session_state에 저장
-if "memory" not in st.session_state and llm is not None:
-    try:
-        st.session_state.memory = ConversationBufferMemory(
-            llm=llm,
-            max_token_limit=120,
-            return_messages=True,
-            memory_key="history"
-        )
-    except Exception:
-        pass
+if "memory" not in st.session_state:
+    st.session_state.memory = ConversationBufferMemory(
+        llm=llm,
+        max_token_limit=120,
+        return_messages=True,
+        memory_key="history"
+    )
 
 # messages도 session_state에 저장
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
 
 # memory 변수 안전하게 할당
-try:
-    memory = st.session_state.memory
-except Exception:
-    if llm is not None:
-        memory = ConversationBufferMemory(
-            llm=llm,
-            max_token_limit=120,
-            return_messages=True,
-            memory_key="history"
-        )
-        st.session_state.memory = memory
-    else:
-        memory = None
+memory = st.session_state.memory
 
 @st.cache_data(show_spinner="Embedding file..." )
 def load_and_split(file):
@@ -138,8 +116,6 @@ def embed_and_retrieve(docs, file):
     cached_embeddings = CacheBackedEmbeddings.from_bytes_store(embeddings, cache_dir)
     vectorstore = FAISS.from_documents(docs, cached_embeddings)
     return vectorstore.as_retriever()
-
-st.title("DocumentGPT")
 
 st.markdown(
     """
@@ -179,52 +155,42 @@ def docs_to_context(docs):
     return "\n\n".join([doc.page_content for doc in docs])
 
 if file:
-    if llm is None:
-        st.warning("API 키를 설정해주세요.")
+    with st.spinner("📄 문서를 처리하고 있습니다..."):
+        retriever = embed_and_retrieve(load_and_split(file), file)
+
+    if retriever:
+        st.success("🎉 파일이 성공적으로 처리되었습니다!")
+        send_message("I'm ready to answer your questions!", "ai", save=False)
+        paint_history()
+
+        def ask(question):
+            history = st.session_state.memory.load_memory_variables({}).get("history", [])
+            
+            docs = retriever.invoke(question)
+            context = docs_to_context(docs)
+            
+            result = prompt.invoke({
+                "question": question, 
+                "context": context,
+                "history": history
+            })
+            
+            response = llm.invoke(result)
+            
+            st.session_state.memory.save_context(
+                {"input": question}, 
+                {"output": response.content}
+            )
+            
+            return response.content
+
+        message = st.chat_input("Ask me anything!")
+        if message:
+            send_message(message, "human")
+            with st.chat_message("ai"):
+                response = ask(message)
     else:
-        with st.spinner("📄 문서를 처리하고 있습니다..."):
-            retriever = embed_and_retrieve(load_and_split(file), file)
-
-        if retriever:
-            st.success("🎉 파일이 성공적으로 처리되었습니다!")
-            send_message("I'm ready to answer your questions!", "ai", save=False)
-            paint_history()
-
-            def ask(question):
-                try:
-                    memory_vars = st.session_state.memory.load_memory_variables({})
-                    history = memory_vars.get("history", [])
-                except Exception:
-                    history = []
-                
-                docs = retriever.invoke(question)
-                context = docs_to_context(docs)
-                
-                result = prompt.invoke({
-                    "question": question, 
-                    "context": context,
-                    "history": history
-                })
-                
-                response = llm.invoke(result)
-                
-                try:
-                    st.session_state.memory.save_context(
-                        {"input": question}, 
-                        {"output": response.content}
-                    )
-                except Exception:
-                    pass
-                
-                return response.content
-
-            message = st.chat_input("Ask me anything!")
-            if message:
-                send_message(message, "human")
-                with st.chat_message("ai"):
-                    response = ask(message)
-        else:
-            st.warning("파일 처리를 완료할 수 없습니다. 위의 오류 메시지를 확인해주세요.")
+        st.warning("파일 처리를 완료할 수 없습니다. 위의 오류 메시지를 확인해주세요.")
 else:
     st.session_state["messages"] = []
 
