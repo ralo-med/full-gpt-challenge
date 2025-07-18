@@ -286,6 +286,10 @@ with st.sidebar:
     if api_key:
         save_settings_to_session(api_key, model_name, temperature)
         os.environ["OPENAI_API_KEY"] = api_key
+    else:
+        st.info("사이드바에서 OpenAI API 키를 입력해주세요.")
+        st.stop()
+
 
     st.header("📁 저장된 파일")
     if os.path.exists("result.txt"):
@@ -311,9 +315,9 @@ with st.sidebar:
         st.write("AI가 분석 후 파일을 저장합니다.")
 
 client = None
-if os.getenv("OPENAI_API_KEY"):
+if st.session_state.get("api_key"):
     try:
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        client = OpenAI(api_key=st.session_state.get("api_key"))
     except Exception as e:
         st.error(f"❌ OpenAI 클라이언트 생성 중 오류: {str(e)}")
 else:
