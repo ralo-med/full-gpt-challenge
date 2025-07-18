@@ -285,9 +285,6 @@ with st.sidebar:
     if api_key and api_key.strip():  # 빈 문자열이 아닌지 확인
         save_settings_to_session(api_key, model_name, temperature)
         os.environ["OPENAI_API_KEY"] = api_key
-    else:
-        st.info("사이드바에서 OpenAI API 키를 입력해주세요.")
-        st.stop()
 
 
     st.header("📁 저장된 파일")
@@ -312,6 +309,10 @@ with st.sidebar:
     else:
         st.info("📝 저장된 파일이 없습니다.")
         st.write("AI가 분석 후 파일을 저장합니다.")
+
+if not (api_key and api_key.strip()):
+    st.info("Please enter your OpenAI API key to proceed.")
+    st.stop()
 
 client = None
 if st.session_state.get("api_key"):
@@ -378,7 +379,7 @@ if st.session_state.processing and len(st.session_state.messages) > 0 and st.ses
 
             except Exception as e:
                 progress_placeholder.empty()
-                error_message = f"❌ 연구 중 오류가 발생했습니다: {str(e)}\n\n💡 API 키와 모델 설정을 확인해주세요."
+                error_message = f"❌ 연구 중 오류가 발생했습니다: {str(e)}\n\n💡 .다시 시도해보세요!"
                 st.session_state.messages.append({"role": "assistant", "content": error_message})
                 st.session_state.processing = False
                 st.rerun()
