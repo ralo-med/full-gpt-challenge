@@ -93,3 +93,10 @@ def setup_sidebar():
     )
 
 
+# 호환성을 위해 남겨둔 빈 함수 (이제 필요 없음)
+
+def save_settings_to_session(*args, **kwargs):
+    """이전 코드와의 호환성을 위해 유지되는 빈 함수."""
+    pass
+
+
