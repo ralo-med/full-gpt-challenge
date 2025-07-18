@@ -52,7 +52,7 @@ def setup_sidebar():
             if new_key:
                 st.session_state.api_key = new_key
                 os.environ["OPENAI_API_KEY"] = new_key
-                st.experimental_rerun()
+                st.rerun()
         else:
             # 최초 입력
             first_key = st.sidebar.text_input(
@@ -63,7 +63,7 @@ def setup_sidebar():
             if first_key:
                 st.session_state.api_key = first_key
                 os.environ["OPENAI_API_KEY"] = first_key
-                st.experimental_rerun()
+                st.rerun()
 
     st.sidebar.header("모델 설정")
     st.sidebar.selectbox(
