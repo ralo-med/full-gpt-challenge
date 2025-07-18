@@ -352,7 +352,8 @@ if st.session_state.processing and len(st.session_state.messages) > 0 and st.ses
     user_prompt = st.session_state.messages[-1]["content"]
     with st.chat_message("assistant"):
         if client is None:
-            st.error("❌ OpenAI API 키가 필요합니다. 사이드바에서 API 키를 입력해주세요.")
+            error_message = "❌ OpenAI API 키가 필요합니다. 사이드바에서 API 키를 입력해주세요."
+            st.session_state.messages.append({"role": "assistant", "content": error_message})
             st.session_state.processing = False
             st.rerun()
         else:
@@ -375,8 +376,8 @@ if st.session_state.processing and len(st.session_state.messages) > 0 and st.ses
 
             except Exception as e:
                 progress_placeholder.empty()
-                st.error(f"❌ 연구 중 오류가 발생했습니다: {str(e)}")
-                st.info("💡 API 키와 모델 설정을 확인해주세요.")
+                error_message = f"❌ 연구 중 오류가 발생했습니다: {str(e)}\n\n💡 API 키와 모델 설정을 확인해주세요."
+                st.session_state.messages.append({"role": "assistant", "content": error_message})
                 st.session_state.processing = False
                 st.rerun()
 
