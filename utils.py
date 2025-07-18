@@ -36,30 +36,18 @@ def setup_sidebar():
 
         # API Key 입력 / 표시
         if st.session_state.api_key:
-            # 이미 저장된 키가 있으면 읽기 전용으로 표시 + X 버튼으로 삭제
-            col1, col2 = st.sidebar.columns([4,1])
-            with col1:
-                st.text_input(
-                    "OpenAI API Key (세션 유지/저장x)",
-                    value=st.session_state.api_key,
-                    key="api_key_display",
-                    type="password",
-                    disabled=True,
-                    label_visibility="visible",
-                )
-            with col2:
-                if col2.button("❌", key="api_key_clear"):
-                    st.session_state.api_key = ""
-                    st.rerun()
-            # 수정하고 싶을 때만 클릭해서 새 키 입력
-            new_key = st.sidebar.text_input(
-                "변경하려면 새 키 입력 후 Enter",
-                key="api_key_update",
-                value="",
+            # 이미 저장된 키가 있으면 읽기 전용으로 표시
+            st.sidebar.text_input(
+                "OpenAI API Key (세션 유지/저장x)",
+                value=st.session_state.api_key,
+                key="api_key_display",
+                type="password",
+                disabled=True,
             )
-            if new_key:
-                st.session_state.api_key = new_key
-                os.environ["OPENAI_API_KEY"] = new_key
+
+            # 아래쪽에 삭제 버튼
+            if st.sidebar.button("❌ API 키 삭제", key="api_key_clear"):
+                st.session_state.api_key = ""
                 st.rerun()
         else:
             # 최초 입력
