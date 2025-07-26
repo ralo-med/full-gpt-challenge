@@ -171,16 +171,10 @@ def load_sitemap_docs(url):
 
 def create_retriever(docs):
     """분할된 문서로부터 벡터 스토어와 리트리버를 생성합니다. API 키가 필요합니다."""
-    try:
-        vectorstore = FAISS.from_documents(docs, OpenAIEmbeddings())
-        return vectorstore.as_retriever()
-    except Exception as e:
-        if "api_key" in str(e).lower() or "openai_api_key" in str(e).lower():
-            st.error("❌ OpenAI API 키가 필요합니다. 사이드바에서 API 키를 입력해주세요.")
-            st.info("💡 사이트맵은 로드되었지만, 임베딩 생성을 위해 API 키가 필요합니다.")
-        else:
-            st.error(f"❌ 임베딩 생성 중 오류가 발생했습니다: {str(e)}")
-        return None
+    # 임베딩 기능 비활성화
+    st.error("❌ 임베딩 기능이 비활성화되었습니다.")
+    st.info("💡 비용 절약을 위해 임베딩 기능을 일시적으로 중단했습니다.")
+    return None
 
 
 st.title("SiteGPT")

@@ -107,15 +107,10 @@ def load_and_split(file):
     return docs
 
 def embed_and_retrieve(docs, file):
-    # 임베딩 캐시 디렉토리 생성
-    embedding_cache_dir = f"./.cache/embeddings/{file.name}"
-    os.makedirs(embedding_cache_dir, exist_ok=True)
-    
-    cache_dir = LocalFileStore(embedding_cache_dir)
-    embeddings = OpenAIEmbeddings()
-    cached_embeddings = CacheBackedEmbeddings.from_bytes_store(embeddings, cache_dir)
-    vectorstore = FAISS.from_documents(docs, cached_embeddings)
-    return vectorstore.as_retriever()
+    # 임베딩 기능 비활성화
+    st.error("❌ 임베딩 기능이 비활성화되었습니다.")
+    st.info("💡 비용 절약을 위해 임베딩 기능을 일시적으로 중단했습니다.")
+    return None
 
 st.markdown(
     """

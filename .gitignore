@@ -2,3 +2,27 @@
 .env
 .DS_Store
 .cache
+
+# 대용량 데이터 파일들
+*.npy
+*.parquet
+*.csv
+*.index
+pill_embed_texts.csv
+pill_embeddings.npy
+pill.index
+pill_metadata.parquet
+pill_id_db.csv
+
+# 임베딩 관련 파일들
+embeddings/
+*.embeddings
+*.faiss
+
+# 캐시 및 임시 파일들
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
